@@ -1,1 +1,136 @@
 
+
+FB Group Poster
+
+A lightweight, mobile-first React app that helps you copy a unique ad for each Facebook group and jump straight to that group’s page for manual posting.
+No automation. No scraping. No account access. Just one-tap convenience for humans who still do the clicking themselves.
+
+⸻
+
+🚀 Features
+	•	CSV Import / Paste
+	•	Load a CSV with columns: Group Name, Group URL, Ad.
+	•	Handles quoted commas, weird headers, and UTF-8 BOMs.
+	•	Works from paste or file upload.
+	•	Smart Local Storage
+	•	Everything stays in your browser — nothing uploaded.
+	•	Saves progress (done, lastPostedAt) automatically.
+	•	Copy + Open
+	•	Tap Copy & Open to copy your ad and launch the group URL.
+	•	Works with iPhone/iPad Safari — long-press and “Paste” manually.
+	•	Progress Tracking
+	•	Marks groups as “done” after posting.
+	•	Displays total progress and timestamps.
+	•	Filtering & Navigation
+	•	Search bar for names/URLs.
+	•	Keyboard shortcuts:
+	•	j → next row
+	•	k → previous row
+	•	c → copy & open
+	•	m → mark done
+	•	Backup / Restore
+	•	Export CSV (with extra Done and Last Posted At columns).
+	•	Backup/restore full JSON state.
+	•	Offline-Friendly
+	•	Works entirely client-side. No backend, no dependencies beyond React.
+
+⸻
+
+🧩 CSV Format
+
+Group Name	Group URL	Ad
+Folsom Community	https://www.facebook.com/groups/355271864659430/	Hi neighbors — Loki and I are sharing resources: https://gofund.me/9aada7036
+Understand Bipolar Disorder	https://www.facebook.com/groups/1234567890/	Sending support today. If allowed, here’s ours: https://gofund.me/9aada7036
+
+Tip: Always include the header row. The app tolerates small variations, but “Group Name / Group URL / Ad” is safest.
+
+⸻
+
+📱 iPhone Tips
+	•	After tapping Copy & Open, long-press in the Facebook post composer and select Paste.
+	•	If a new tab doesn’t open, disable the pop-up blocker or turn off “Open group after copy.”
+	•	Safari sometimes blocks clipboard reads; don’t panic — paste manually.
+
+⸻
+
+🧰 Project Structure
+
+/src
+  App.tsx             # Main React component
+  lib/
+    csv.ts            # Tiny CSV parser
+    clipboard.ts      # Copy helpers + iOS fallback
+    storage.ts        # localStorage wrapper
+    id.ts             # UID generator
+  components/
+    Toast.tsx
+    Toggle.tsx
+/public
+  favicon.svg
+vite.config.ts
+vercel.json
+render.yaml
+README.md
+
+
+⸻
+
+🏗️ Build & Run
+
+Local Dev
+
+npm install
+npm run dev
+
+App runs at http://localhost:5173.
+
+Build
+
+npm run build
+npm run preview
+
+
+⸻
+
+🌐 Deployment
+
+Vercel
+
+Add this vercel.json:
+
+{
+  "version": 2,
+  "builds": [{ "src": "dist/**", "use": "@vercel/static" }],
+  "routes": [{ "src": "/(.*)", "dest": "/index.html" }]
+}
+
+Render (Static)
+
+Add render.yaml:
+
+services:
+  - type: web
+    name: fb-group-poster
+    env: static
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+
+
+⸻
+
+⚠️ Disclaimer
+
+This app does not automate Facebook posting, scraping, or logging in.
+It’s a clipboard assistant — you still control every post.
+
+Facebook’s UI and policies change often. If they break your flow, complain to Facebook, not to this poor app.
+
+⸻
+
+❤️ Credit
+
+Created by Travis Michael Ramsey (DevSkits916 / TokensNTokin).
+Built with React, caffeine, and existential determination.
+Support Travis and Loki: https://gofund.me/9aada7036￼
+
+⸻
