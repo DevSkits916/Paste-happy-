@@ -102,18 +102,32 @@ function InnerApp() {
         push('Ad text is empty for this row', 'error');
         return;
       }
+
+      const urlIsValid = isValidHttpUrl(row.url);
+      const shouldAttemptOpen = state.autoOpen && urlIsValid;
+      let openedWindow: Window | null = null;
+
+      if (state.autoOpen && !urlIsValid) {
+        push('URL must start with http:// or https:// before opening.', 'error');
+      }
+
+      if (shouldAttemptOpen) {
+        openedWindow = window.open(row.url, '_blank', 'noopener,noreferrer');
+        if (!openedWindow) {
+          push('Browser blocked the new tab. Allow pop-ups for this site.', 'error');
+        }
+      }
+
       try {
         await copyText(row.ad);
         push('Copied ad to clipboard', 'success');
-        if (state.autoOpen && isValidHttpUrl(row.url)) {
-          window.open(row.url, '_blank', 'noopener,noreferrer');
-        } else if (state.autoOpen) {
-          push('URL is not valid. Please check before opening.', 'error');
-        }
         updateRow(row.id, (current) => ({ ...current, done: true, lastPostedAt: new Date().toISOString() }));
       } catch (error) {
         console.error(error);
         push('Copy failed. Please long-press to paste manually.', 'error');
+        if (openedWindow) {
+          openedWindow.focus();
+        }
       }
     },
     [push, state.autoOpen, updateRow]
