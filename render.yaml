@@ -2,6 +2,6 @@ services:
   - type: web
     name: fb-group-poster
     env: static
-    buildCommand: npm ci && npm run build
+    buildCommand: npm ci --include=dev && npm run build
     staticPublishPath: dist
     pullRequestPreviewsEnabled: false
