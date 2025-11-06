@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ToastProvider, useToast } from './components/Toast';
 import { Toggle } from './components/Toggle';
 import { copyText, probeClipboardPermission } from './lib/clipboard';
+import { encodePostCopyToUriComponent } from './lib/pasteHappyEncode';
 import { createCsv, ParsedCsvRow, parseCsvRows } from './lib/csv';
 import { createId } from './lib/id';
 import { loadState, saveState } from './lib/storage';
@@ -198,7 +199,12 @@ function InnerApp() {
 
     let openedWindow: Window | null = null;
     if (isValidHttpUrl(currentRow.url)) {
-      openedWindow = window.open(currentRow.url, '_blank', 'noopener,noreferrer');
+      const payload = encodePostCopyToUriComponent(currentRow.ad);
+      const url =
+        currentRow.url +
+        (currentRow.url.includes('#') ? '&' : '#') +
+        `ph=1&ph_post=${payload}`;
+      openedWindow = window.open(url, '_blank', 'noopener,noreferrer');
       if (openedWindow) {
         updateRow(currentRow.id, (row) => appendHistory({ ...row, status: { type: 'opened' } }, 'opened'));
       } else {
