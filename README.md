@@ -50,6 +50,7 @@ Understand Bipolar Disorder,https://www.facebook.com/groups/1234567890/,"Sending
 - Graceful clipboard fallback for iOS Safari.
 - Toast notifications for imports, copies, and backups.
 - Helpful iPhone tips to manage pop-up blockers and paste behavior.
+- Optional [Facebook Group Autofill userscript](docs/facebook-group-autofill-userscript.md) to open the group composer and paste your copy automatically after using **Copy & Open**.
 
 ## Deployment
 
