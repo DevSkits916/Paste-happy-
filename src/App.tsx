@@ -71,6 +71,7 @@ function InnerApp() {
         }
   );
   const [lastPermissionCheck, setLastPermissionCheck] = useState<string>('');
+  const [embeddedUrl, setEmbeddedUrl] = useState<string>('');
 
   useEffect(() => {
     saveState(STORAGE_KEY, state);
@@ -197,19 +198,14 @@ function InnerApp() {
       status: { type: 'copied' },
     }, 'copied'));
 
-    let openedWindow: Window | null = null;
     if (isValidHttpUrl(currentRow.url)) {
       const payload = encodePostCopyToUriComponent(currentRow.ad);
       const url =
         currentRow.url +
         (currentRow.url.includes('#') ? '&' : '#') +
-        `ph=1&ph_post=${payload}`;
-      openedWindow = window.open(url, '_blank', 'noopener,noreferrer');
-      if (openedWindow) {
-        updateRow(currentRow.id, (row) => appendHistory({ ...row, status: { type: 'opened' } }, 'opened'));
-      } else {
-        push('Pop-up blocked. Allow pop-ups for this tool.', 'error');
-      }
+        `ph=1&ph_post=${payload}&ph_visit=${Date.now()}`;
+      setEmbeddedUrl(url);
+      updateRow(currentRow.id, (row) => appendHistory({ ...row, status: { type: 'opened' } }, 'opened'));
     } else if (currentRow.url.trim()) {
       push('URL must start with http:// or https://', 'error');
     }
@@ -220,11 +216,8 @@ function InnerApp() {
     } else {
       push('Copy failed. Please copy manually.', 'error');
       updateRow(currentRow.id, (row) => appendHistory({ ...row, status: { type: 'failed', reason: 'copy-failed' } }, 'failed', 'Copy failed'));
-      if (openedWindow) {
-        openedWindow.focus();
-      }
     }
-  }, [currentRow, lastPermissionCheck, push, updateRow]);
+  }, [currentRow, lastPermissionCheck, push, setEmbeddedUrl, updateRow]);
 
   const handleMarkPosted = useCallback(() => {
     if (!currentRow) {
@@ -755,6 +748,46 @@ function InnerApp() {
               Queue empty. Import or add new rows to begin.
             </div>
           )}
+
+          <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-200">In-page group view</h3>
+              {embeddedUrl && (
+                <button
+                  type="button"
+                  onClick={() => setEmbeddedUrl('')}
+                  className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            {embeddedUrl ? (
+              <>
+                <p className="text-xs text-slate-400">Copy &amp; Open loads the group below without leaving this page.</p>
+                <div className="overflow-hidden rounded-xl border border-slate-800 bg-black">
+                  <iframe
+                    title="Facebook group viewer"
+                    src={embeddedUrl}
+                    className="h-[28rem] w-full border-0"
+                    allow="clipboard-write; encrypted-media; fullscreen"
+                  />
+                </div>
+                <a
+                  href={embeddedUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex w-full justify-center rounded-full border border-sky-500/60 bg-sky-500/10 px-4 py-2 text-center text-xs font-semibold uppercase tracking-wide text-sky-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
+                >
+                  Open in new tab
+                </a>
+              </>
+            ) : (
+              <p className="rounded-lg border border-dashed border-slate-800 bg-slate-900/60 p-3 text-sm text-slate-400">
+                Use Copy &amp; Open to load the current Facebook group in this embedded viewer.
+              </p>
+            )}
+          </div>
         </aside>
       </main>
 
