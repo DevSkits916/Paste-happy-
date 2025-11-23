@@ -503,6 +503,25 @@ function InnerApp() {
     push('Added row to queue.', 'success');
   }, [push]);
 
+  const handleDeleteCurrent = useCallback(() => {
+    if (!currentRow) {
+      push('No row selected to delete.', 'info');
+      return;
+    }
+
+    setState((prev) => {
+      const nextRows = prev.rows.filter((row) => row.id !== currentRow.id);
+      const nextOrder = prev.queue.order.filter((id) => id !== currentRow.id);
+      const nextCursor = Math.min(prev.queue.cursor, Math.max(nextOrder.length - 1, 0));
+      return {
+        rows: nextRows,
+        queue: { ...prev.queue, order: nextOrder, cursor: nextCursor },
+      };
+    });
+
+    push('Removed current row from CSV.', 'success');
+  }, [currentRow, push]);
+
   const handleFilePicker = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
@@ -541,7 +560,22 @@ function InnerApp() {
             >
               Sample CSV
             </a>
+            <a
+              href="#page-bottom"
+              className="rounded-full border border-indigo-500/60 bg-indigo-500/10 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-indigo-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
+            >
+              Jump to bottom
+            </a>
           </div>
+        </div>
+        <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-200">
+          <p className="font-semibold uppercase tracking-wide text-slate-300">How to use Paste Happy</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-slate-300">
+            <li>Import your Facebook group CSV or add rows manually, then tag or filter them as needed.</li>
+            <li>Use Copy &amp; Open to copy the post copy and jump into the next group tab.</li>
+            <li>Mark posted, retry, or skip to keep the queue accurate, and export when you need a fresh CSV.</li>
+          </ul>
+          <p className="mt-2 text-slate-400">Cooldowns, history, and filters help you stay organized while posting.</p>
         </div>
         <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
           <Stat label="Pending" value={progressStats.pending} />
@@ -737,6 +771,13 @@ function InnerApp() {
           >
             Skip
           </button>
+          <button
+            type="button"
+            onClick={handleDeleteCurrent}
+            className="h-16 rounded-full border border-rose-500/70 bg-rose-500/15 text-lg font-semibold uppercase tracking-wide text-rose-50 shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-400"
+          >
+            Delete from CSV
+          </button>
 
           {currentRow ? (
             <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
@@ -795,6 +836,7 @@ function InnerApp() {
           }
         }}
       />
+      <div id="page-bottom" />
     </div>
   );
 }
