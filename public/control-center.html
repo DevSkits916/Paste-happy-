@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Facebook Groups Control Center</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b0d10;
+      --panel: #161a1f;
+      --accent: #3fa9f5;
+      --muted: #8992a3;
+      --border: #232a32;
+      --danger: #ff7b7b;
+      --success: #7dd087;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: #e8ecf2;
+      height: 100vh;
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+    }
+
+    .app-shell {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      grid-template-rows: 1fr;
+      height: 100vh;
+      background: linear-gradient(135deg, #0b0d10 0%, #0f1318 100%);
+    }
+
+    @media (max-width: 900px) {
+      .app-shell {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr;
+      }
+    }
+
+    .panel {
+      border: 1px solid var(--border);
+      background: var(--panel);
+      padding: 16px;
+      overflow: hidden;
+    }
+
+    .queue-panel {
+      border-right: 1px solid var(--border);
+    }
+
+    @media (max-width: 900px) {
+      .queue-panel {
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+    }
+
+    .panel-title {
+      font-size: 18px;
+      margin: 0 0 12px;
+      color: #f2f5fa;
+      letter-spacing: 0.2px;
+    }
+
+    .queue-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      overflow-y: auto;
+      max-height: calc(100vh - 80px);
+      padding-right: 6px;
+    }
+
+    .queue-item {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: #11151b;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: border-color 0.2s ease, background 0.2s ease, transform 0.1s ease;
+    }
+
+    .queue-item:hover {
+      border-color: var(--accent);
+      transform: translateY(-1px);
+    }
+
+    .queue-item.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+      background: #0f141a;
+    }
+
+    .queue-item .status {
+      width: 20px;
+      text-align: center;
+      font-weight: 700;
+    }
+
+    .queue-item .details {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .queue-item.done {
+      opacity: 0.7;
+      text-decoration: line-through;
+    }
+
+    .fake-frame {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      height: 100%;
+    }
+
+    .meta {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 8px 12px;
+      align-items: center;
+      padding: 12px;
+      border: 1px solid var(--border);
+      background: #0f141a;
+      border-radius: 10px;
+    }
+
+    .meta-label {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .meta-value a {
+      color: var(--accent);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    .meta-value a:hover {
+      text-decoration: underline;
+    }
+
+    .frame-body {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #0c1016;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-height: 0;
+      flex: 1;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+    }
+
+    .steps {
+      list-style: decimal;
+      padding-left: 20px;
+      margin: 0;
+      color: #cdd6e5;
+      line-height: 1.4;
+      display: grid;
+      gap: 4px;
+    }
+
+    .post-box {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      background: #0f141a;
+      flex: 1;
+      min-height: 180px;
+      overflow: auto;
+      white-space: pre-wrap;
+      line-height: 1.5;
+      color: #f6f8fb;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .controls .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    button {
+      border: 1px solid var(--border);
+      background: #131922;
+      color: #f2f5fa;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.1s ease, border-color 0.2s ease;
+    }
+
+    button:hover {
+      background: #1a2230;
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    button.primary {
+      background: linear-gradient(135deg, #3fa9f5, #2676ff);
+      border-color: color-mix(in srgb, #3fa9f5 60%, #2676ff 40%);
+      color: #0b0d10;
+      box-shadow: 0 4px 18px rgba(63, 169, 245, 0.28);
+    }
+
+    button.primary:hover {
+      background: linear-gradient(135deg, #4db1ff, #2c7fff);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .status-line {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <section class="panel queue-panel">
+      <h2 class="panel-title">Groups Queue</h2>
+      <ul class="queue-list" id="queueList" aria-label="Groups Queue"></ul>
+    </section>
+    <section class="panel">
+      <div class="fake-frame">
+        <div class="meta">
+          <div class="meta-label">Current group:</div>
+          <div class="meta-value" id="currentGroupName">—</div>
+          <div class="meta-label">URL:</div>
+          <div class="meta-value"><a id="currentGroupUrl" href="#" target="_blank" rel="noopener noreferrer">—</a></div>
+        </div>
+
+        <div class="frame-body">
+          <ol class="steps">
+            <li>Copy and open in Facebook</li>
+            <li>Paste the text into the post box</li>
+            <li>Publish</li>
+            <li>Come back and mark posted</li>
+          </ol>
+          <div class="post-box" id="postBox"></div>
+        </div>
+
+        <div class="controls">
+          <div class="button-row">
+            <button id="prevBtn" type="button">◀ Prev</button>
+            <button id="nextBtn" type="button">Next ▶</button>
+          </div>
+          <div class="button-row">
+            <button class="primary" id="copyOpenBtn" type="button">Copy &amp; Open in Facebook</button>
+            <button id="markPostedBtn" type="button">Mark Posted &amp; Next</button>
+          </div>
+        </div>
+        <div class="status-line" id="statusLine">Row 0/0 • Status: —</div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    (() => {
+      let rows = [
+        {
+          id: "grp-001",
+          group_name: "Neighborhood Helpers",
+          group_url: "https://www.facebook.com/groups/neighborhoodhelpers",
+          post: "Hello neighbors! We are organizing a weekend cleanup and would love your help. Comment if you can join!",
+          status: "pending",
+        },
+        {
+          id: "grp-002",
+          group_name: "Local Gardeners",
+          group_url: "https://www.facebook.com/groups/localgardeners",
+          post: "Plant swap this Saturday! Bring your cuttings and seedlings. Location: Community Park pavilion at 10am.",
+          status: "pending",
+        },
+        {
+          id: "grp-003",
+          group_name: "Makers & Tinkerers",
+          group_url: "https://www.facebook.com/groups/makerstinkerers",
+          post: "Workshop alert: Intro to 3D printing this Sunday. RSVP to reserve a seat!",
+          status: "pending",
+        },
+      ];
+
+      let currentIndex = 0;
+      let sessionId = "default";
+
+      const queueList = document.getElementById("queueList");
+      const currentGroupName = document.getElementById("currentGroupName");
+      const currentGroupUrl = document.getElementById("currentGroupUrl");
+      const postBox = document.getElementById("postBox");
+      const statusLine = document.getElementById("statusLine");
+      const prevBtn = document.getElementById("prevBtn");
+      const nextBtn = document.getElementById("nextBtn");
+      const copyOpenBtn = document.getElementById("copyOpenBtn");
+      const markPostedBtn = document.getElementById("markPostedBtn");
+
+      const storageKey = () => `fb-control-center:${sessionId}`;
+
+      function loadState() {
+        const raw = localStorage.getItem(storageKey());
+        if (!raw) return;
+        try {
+          const parsed = JSON.parse(raw);
+          if (Number.isInteger(parsed.currentIndex)) {
+            currentIndex = Math.min(Math.max(parsed.currentIndex, 0), rows.length - 1);
+          }
+          if (Array.isArray(parsed.statuses)) {
+            const statusById = parsed.statuses.reduce((acc, item) => {
+              if (item && typeof item.id === "string") {
+                acc[item.id] = item.status;
+              }
+              return acc;
+            }, {});
+            rows = rows.map((row) => ({
+              ...row,
+              status: statusById[row.id] || row.status || "pending",
+            }));
+          }
+        } catch (err) {
+          console.warn("Failed to load saved state", err);
+        }
+      }
+
+      function saveState() {
+        const payload = {
+          currentIndex,
+          statuses: rows.map((row) => ({ id: row.id, status: row.status })),
+        };
+        localStorage.setItem(storageKey(), JSON.stringify(payload));
+      }
+
+      function setCurrentIndex(index) {
+        currentIndex = Math.min(Math.max(index, 0), rows.length - 1);
+        saveState();
+        render();
+      }
+
+      function renderQueue() {
+        queueList.innerHTML = "";
+        rows.forEach((row, index) => {
+          const li = document.createElement("li");
+          li.className = "queue-item" + (row.status === "done" ? " done" : "") + (index === currentIndex ? " active" : "");
+          li.dataset.index = index;
+
+          const statusIcon = document.createElement("span");
+          statusIcon.className = "status";
+          statusIcon.textContent = row.status === "done" ? "✓" : "…";
+          statusIcon.style.color = row.status === "done" ? "var(--success)" : "var(--muted)";
+
+          const details = document.createElement("div");
+          details.className = "details";
+          const name = document.createElement("div");
+          name.textContent = row.group_name;
+          details.appendChild(name);
+
+          li.appendChild(statusIcon);
+          li.appendChild(details);
+          li.addEventListener("click", () => setCurrentIndex(index));
+          queueList.appendChild(li);
+        });
+      }
+
+      function renderCurrentRow() {
+        const row = rows[currentIndex];
+        if (!row) return;
+        currentGroupName.textContent = row.group_name;
+        currentGroupUrl.textContent = row.group_url;
+        currentGroupUrl.href = row.group_url;
+        postBox.textContent = row.post;
+        statusLine.textContent = `Row ${currentIndex + 1}/${rows.length} • Status: ${row.status}`;
+        prevBtn.disabled = currentIndex === 0;
+        nextBtn.disabled = currentIndex >= rows.length - 1;
+      }
+
+      function render() {
+        renderQueue();
+        renderCurrentRow();
+      }
+
+      function copyToClipboard(text) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          return navigator.clipboard.writeText(text);
+        }
+        return new Promise((resolve, reject) => {
+          const textarea = document.createElement("textarea");
+          textarea.value = text;
+          textarea.setAttribute("readonly", "");
+          textarea.style.position = "absolute";
+          textarea.style.left = "-9999px";
+          document.body.appendChild(textarea);
+          const selected = document.getSelection().rangeCount > 0 ? document.getSelection().getRangeAt(0) : null;
+          textarea.select();
+          try {
+            document.execCommand("copy") ? resolve() : reject();
+          } catch (err) {
+            reject(err);
+          } finally {
+            document.body.removeChild(textarea);
+            if (selected) {
+              const selection = document.getSelection();
+              selection.removeAllRanges();
+              selection.addRange(selected);
+            }
+          }
+        });
+      }
+
+      function copyAndOpen() {
+        const row = rows[currentIndex];
+        if (!row) return;
+        copyToClipboard(row.post)
+          .catch(() => {})
+          .finally(() => {
+            window.open(row.group_url, "_blank", "noopener");
+          });
+      }
+
+      function markPostedAndNext() {
+        if (!rows[currentIndex]) return;
+        rows[currentIndex].status = "done";
+        saveState();
+        const nextIndex = Math.min(currentIndex + 1, rows.length - 1);
+        setCurrentIndex(nextIndex);
+      }
+
+      prevBtn.addEventListener("click", () => setCurrentIndex(currentIndex - 1));
+      nextBtn.addEventListener("click", () => setCurrentIndex(currentIndex + 1));
+      copyOpenBtn.addEventListener("click", copyAndOpen);
+      markPostedBtn.addEventListener("click", markPostedAndNext);
+
+      window.initFromCsv = function initFromCsv(csvRows, incomingSessionId = "default") {
+        sessionId = incomingSessionId || "default";
+        rows = (csvRows || []).map((row, idx) => ({
+          id: row.id ?? `row-${idx}`,
+          group_name: row.group_name || row.name || `Group ${idx + 1}`,
+          group_url: row.group_url || row.url || "#",
+          post: row.post || "",
+          status: "pending",
+        }));
+        if (!rows.length) {
+          rows = [];
+        }
+        loadState();
+        currentIndex = Math.min(currentIndex, Math.max(rows.length - 1, 0));
+        render();
+      };
+
+      loadState();
+      render();
+    })();
+  </script>
+</body>
+</html>
