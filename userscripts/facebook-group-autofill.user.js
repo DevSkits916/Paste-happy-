@@ -32,7 +32,7 @@
     return;
   }
 
-  clearPhParameters();
+  clearPostParameters();
   const status = showStatus('Paste Happy: Preparing your post…');
 
   ensureComposerReady()
@@ -48,6 +48,12 @@
     });
 
   function extractEncodedPayload() {
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const pastePost = hashParams.get('pastePost');
+    if (pastePost) {
+      return pastePost;
+    }
+
     const segments = [];
     if (window.location.search.length > 1) {
       segments.push(window.location.search.slice(1));
@@ -60,10 +66,10 @@
     }
 
     const params = new URLSearchParams(segments.join('&'));
-    if (params.get('ph') !== '1') {
-      return null;
+    if (params.get('ph') === '1') {
+      return params.get('ph_post');
     }
-    return params.get('ph_post');
+    return null;
   }
 
   function decodePostCopy(input) {
@@ -74,18 +80,24 @@
     return decompressFromEncodedURIComponent(uriComponent);
   }
 
-  function clearPhParameters() {
+  function clearPostParameters() {
     const search = new URLSearchParams(window.location.search);
     const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
     let changed = false;
+    if (hash.has('pastePost')) {
+      hash.delete('pastePost');
+      changed = true;
+    }
     if (search.get('ph') === '1') {
       search.delete('ph');
       search.delete('ph_post');
+      search.delete('ph_visit');
       changed = true;
     }
     if (hash.get('ph') === '1') {
       hash.delete('ph');
       hash.delete('ph_post');
+      hash.delete('ph_visit');
       changed = true;
     }
     if (!changed) {
