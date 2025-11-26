@@ -53,6 +53,7 @@ Understand Bipolar Disorder,https://www.facebook.com/groups/1234567890/,"Sending
 - Toast notifications for imports, copies, and backups.
 - Helpful iPhone tips to manage pop-up blockers and paste behavior.
 - Optional [Facebook Group Autofill userscript](docs/facebook-group-autofill-userscript.md) to open the group composer and paste your copy automatically after using **Copy & Open**.
+- Optional [Facebook Autopost userscript](docs/facebook-autopost-userscript.md) to paste your clipboard and click **Post** automatically after Copy & Open.
 
 ## Deployment
 
@@ -79,4 +80,4 @@ Render configuration is provided in `render.yaml`:
 
 ## Privacy & Safety
 
-FB Group Poster never automates form submissions, login flows, or posting on your behalf. All processing happens in your browser, and clipboard usage relies on native browser APIs.
+FB Group Poster never automates form submissions, login flows, or posting on your behalf unless you explicitly install an optional userscript. All processing happens in your browser, and clipboard usage relies on native browser APIs.
