@@ -4,7 +4,7 @@ The optional Facebook Group Autofill userscript streamlines Paste Happy's workfl
 
 ## What it does
 
-- Detects the special `ph=1` flag appended by the Copy & Open action.
+- Detects the `#pastePost=<encoded>` hash appended by the Copy & Open action (with fallback for legacy `ph=1` links).
 - Opens the "Create post" dialog (or focuses the inline composer) on the Facebook group page.
 - Pastes the encoded post copy directly into Facebook's editor.
 - Shows a status banner confirming when the post is ready so you just have to review and click **Post**.

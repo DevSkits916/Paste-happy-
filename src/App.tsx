@@ -208,10 +208,7 @@ function InnerApp() {
 
     if (isValidHttpUrl(currentRow.url)) {
       const payload = encodePostCopyToUriComponent(currentRow.ad);
-      nextTabUrl =
-        currentRow.url +
-        (currentRow.url.includes('#') ? '&' : '#') +
-        `ph=1&ph_post=${payload}&ph_visit=${Date.now()}`;
+      nextTabUrl = appendPostToUrl(currentRow.url, payload);
     } else if (currentRow.url.trim()) {
       push('URL must start with http:// or https://', 'error');
     }
@@ -847,6 +844,14 @@ function appendHistory(row: GroupRow, action: RowHistoryEntry['action'], note?: 
     ...row,
     history: [...row.history, historyEntry],
   };
+}
+
+function appendPostToUrl(groupUrl: string, encodedPost: string): string {
+  if (groupUrl.includes('#')) {
+    const separator = groupUrl.endsWith('#') ? '' : '&';
+    return `${groupUrl}${separator}pastePost=${encodedPost}`;
+  }
+  return `${groupUrl}#pastePost=${encodedPost}`;
 }
 
 function isValidHttpUrl(value: string): boolean {
