@@ -429,18 +429,18 @@ function InnerApp() {
               );
             })}
           </div>
-          <div className="flex flex-1 items-center gap-2 md:max-w-md">
+          <div className="flex flex-col gap-2 md:flex-1 md:flex-row md:items-center md:gap-3 md:pl-4">
             <input
               type="search"
               value={state.search}
               onChange={handleSearchChange}
               placeholder="Search group or URL"
-              className="h-11 flex-1 rounded-full border border-slate-700 bg-slate-900 px-4 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
+              className="h-11 w-full flex-1 rounded-full border border-slate-700 bg-slate-900 px-4 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
             />
             <button
               type="button"
               onClick={handleShuffle}
-              className="h-11 rounded-full border border-slate-700 bg-slate-900 px-4 text-sm font-semibold uppercase tracking-wide shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
+              className="h-11 w-full rounded-full border border-slate-700 bg-slate-900 px-4 text-sm font-semibold uppercase tracking-wide shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400 md:w-auto"
             >
               Shuffle pending
             </button>
@@ -455,7 +455,7 @@ function InnerApp() {
           </p>
         )}
 
-        <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/60">
+        <div className="hidden overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/60 md:block">
           <table className="min-w-full divide-y divide-slate-800 text-sm">
             <thead className="bg-slate-900/60 text-left text-xs uppercase tracking-wide text-slate-400">
               <tr>
@@ -482,16 +482,32 @@ function InnerApp() {
             </tbody>
           </table>
         </div>
+
+        <div className="space-y-3 md:hidden">
+          {filteredRows.map((row) => (
+            <RowCard
+              key={row.id}
+              row={row}
+              active={row.id === state.currentId}
+              onCopyOpen={() => handleCopyAndOpen(row)}
+              onPosted={() => handlePosted(row)}
+              onSkip={() => handleSkip(row)}
+              onUndo={() => handleUndo(row)}
+              onEdit={(text) => handlePostEdit(row.id, text)}
+              onSelect={() => handleSetCurrent(row)}
+            />
+          ))}
+        </div>
       </main>
 
       {currentRow && (
         <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-800 bg-slate-950/95 px-4 py-3 shadow-2xl backdrop-blur">
-          <div className="mx-auto flex max-w-5xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-slate-100">{currentRow.name || 'Untitled group'}</p>
               <p className="truncate text-xs text-slate-400">{currentRow.url || 'No URL provided'}</p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-2">
               <ActionButton label="Copy & Open" tone="primary" onClick={() => handleCopyAndOpen(currentRow)} />
               <ActionButton label="Mark Posted" tone="success" onClick={() => handlePosted(currentRow)} />
               <ActionButton label="Skip" tone="muted" onClick={() => handleSkip(currentRow)} />
@@ -640,6 +656,138 @@ function RowItem({
   );
 }
 
+function RowCard({
+  row,
+  active,
+  onCopyOpen,
+  onPosted,
+  onSkip,
+  onUndo,
+  onEdit,
+  onSelect,
+}: {
+  row: QueueRow;
+  active: boolean;
+  onCopyOpen: () => void;
+  onPosted: () => void;
+  onSkip: () => void;
+  onUndo: () => void;
+  onEdit: (text: string) => void;
+  onSelect: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(row.ad);
+
+  useEffect(() => {
+    setDraft(row.ad);
+  }, [row.ad]);
+
+  const showUndo = row.undoExpiresAt !== undefined && row.undoExpiresAt > Date.now();
+
+  return (
+    <div
+      className={`rounded-2xl border bg-slate-950/70 p-4 shadow transition ${
+        active ? 'border-sky-600/60 ring-1 ring-sky-500/40' : 'border-slate-800'
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-1">
+          <button type="button" onClick={onSelect} className="text-left">
+            <p className="text-base font-semibold leading-tight">{row.name || 'Untitled group'}</p>
+            <p className="text-xs text-slate-400 break-words">{row.url || 'No URL'}</p>
+            {row.lastChangedAt && (
+              <p className="mt-1 text-xs text-slate-500">Updated {new Date(row.lastChangedAt).toLocaleString()}</p>
+            )}
+          </button>
+          <div className="flex items-center gap-2 text-xs">
+            <StatusBadge status={row.status} />
+            {showUndo && (
+              <button
+                type="button"
+                onClick={onUndo}
+                className="font-semibold text-sky-300 underline-offset-2 hover:underline"
+              >
+                Undo
+              </button>
+            )}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setExpanded((prev) => !prev)}
+          className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs font-semibold uppercase tracking-wide"
+        >
+          {expanded ? 'Collapse' : 'Expand'}
+        </button>
+      </div>
+
+      <div className="mt-3 space-y-2">
+        {!editing && (
+          <>
+            <p className={`text-sm text-slate-100 ${expanded ? 'whitespace-pre-wrap' : 'line-clamp-4 whitespace-pre-wrap'}`}>
+              {row.ad || 'No post text yet.'}
+            </p>
+            <div className="flex flex-wrap gap-2 text-xs">
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="font-semibold text-sky-300 underline-offset-2 hover:underline"
+              >
+                Edit text
+              </button>
+              <button
+                type="button"
+                onClick={onCopyOpen}
+                className="font-semibold text-sky-300 underline-offset-2 hover:underline"
+              >
+                Copy now
+              </button>
+            </div>
+          </>
+        )}
+        {editing && (
+          <div className="space-y-2">
+            <textarea
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              className="min-h-[120px] w-full rounded-xl border border-slate-700 bg-slate-900 p-3 text-sm text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
+            />
+            <div className="flex flex-wrap gap-2 text-xs">
+              <button
+                type="button"
+                onClick={() => {
+                  onEdit(draft);
+                  setEditing(false);
+                }}
+                className="rounded-full border border-emerald-500/60 bg-emerald-500/15 px-4 py-2 font-semibold uppercase tracking-wide text-emerald-100"
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDraft(row.ad);
+                  setEditing(false);
+                }}
+                className="rounded-full border border-slate-700 bg-slate-900 px-4 py-2 font-semibold uppercase tracking-wide"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <ActionButton label="Copy & Open" tone="primary" onClick={onCopyOpen} />
+        <ActionButton label="Mark Posted" tone="success" onClick={onPosted} />
+        <ActionButton label="Skip" tone="muted" onClick={onSkip} />
+      </div>
+    </div>
+  );
+}
+
 function StatusBadge({ status }: { status: RowStatusKind }) {
   const styles: Record<RowStatusKind, string> = {
     pending: 'border-slate-700 bg-slate-800 text-slate-200',
@@ -687,7 +835,7 @@ function ActionButton({
     <button
       type="button"
       onClick={onClick}
-      className={`min-w-[9rem] rounded-full border px-4 py-2 text-sm font-semibold uppercase tracking-wide shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400 ${styles[tone]}`}
+      className={`w-full rounded-full border px-4 py-2 text-sm font-semibold uppercase tracking-wide shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400 sm:w-auto sm:min-w-[9rem] ${styles[tone]}`}
     >
       {label}
     </button>
