@@ -350,9 +350,12 @@ function InnerApp() {
     <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-6 px-4 pb-28 pt-6 text-slate-100">
       <header className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Paste Happy</h1>
-            <p className="text-sm text-slate-400">Manage Facebook group posting runs without losing your place.</p>
+          <div className="flex items-center gap-3">
+            <img src="/logo-fq.svg" alt="Paste Happy logo" className="h-12 w-12 rounded-2xl shadow-lg shadow-sky-900/40" />
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">Paste Happy</h1>
+              <p className="text-sm text-slate-400">Manage Facebook group posting runs without losing your place.</p>
+            </div>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
