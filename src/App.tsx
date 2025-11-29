@@ -1,383 +1,251 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ToastProvider, useToast } from './components/Toast';
-import { Toggle } from './components/Toggle';
-import { copyText, probeClipboardPermission } from './lib/clipboard';
-import { encodePostCopyToUriComponent } from './lib/pasteHappyEncode';
-import { createCsv, ParsedCsvRow, parseCsvRows } from './lib/csv';
+import { copyText } from './lib/clipboard';
+import { ParsedCsvRow, parseCsvRows } from './lib/csv';
 import { createId } from './lib/id';
 import { loadState, saveState } from './lib/storage';
 import { RowHistoryEntry, RowStatusKind } from './lib/types';
 
-interface RowStatus {
-  type: RowStatusKind;
-  reason?: string;
-}
-
-interface GroupRow {
+interface QueueRow {
   id: string;
   name: string;
   url: string;
   ad: string;
-  tags: string[];
-  cooldownHours: number;
-  retries: number;
-  lastPostedAt?: string;
-  nextEligibleAt?: string;
-  status: RowStatus;
+  status: RowStatusKind;
   history: RowHistoryEntry[];
-}
-
-interface QueueFilters {
-  search: string;
-  tags: string[];
-}
-
-interface QueueState {
-  order: string[];
-  cursor: number;
-  paused: boolean;
-  shuffleSeed: number | null;
-  filters: QueueFilters;
+  lastChangedAt?: string;
+  undoExpiresAt?: number;
 }
 
 interface AppState {
-  rows: GroupRow[];
-  queue: QueueState;
+  rows: QueueRow[];
+  currentId: string | null;
+  filter: 'all' | RowStatusKind;
+  search: string;
 }
 
-const STORAGE_KEY = 'fb-group-queue-state-v2';
-const DEFAULT_COOLDOWN_HOURS = 24;
-
-const SAMPLE_CSV = `ID,Group Name,Group URL,Ad,Tags,CooldownHours,Retries,LastPostedAt,NextEligibleAt,Status,FailureReason,History\n,Neighborhood Buy Nothing,https://www.facebook.com/groups/example/,"Hi neighbors! Loki and I are sharing resources: https://gofund.me/9aada7036","mutual aid|neighborhood",24,0,,,pending,,[]`;
+const STORAGE_KEY = 'paste-happy-session-v3';
+const UNDO_DURATION_MS = 16000;
 
 function InnerApp() {
   const { push } = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const undoTimers = useRef<Record<string, number>>({});
+
   const [state, setState] = useState<AppState>(() =>
     typeof window !== 'undefined'
-      ? loadState<AppState>(STORAGE_KEY, {
-          rows: [],
-          queue: {
-            order: [],
-            cursor: 0,
-            paused: false,
-            shuffleSeed: null,
-            filters: { search: '', tags: [] },
-          },
-        })
-      : {
-          rows: [],
-          queue: { order: [], cursor: 0, paused: false, shuffleSeed: null, filters: { search: '', tags: [] } },
-        }
+      ? loadState<AppState>(STORAGE_KEY, { rows: [], currentId: null, filter: 'all', search: '' })
+      : { rows: [], currentId: null, filter: 'all', search: '' }
   );
-  const [lastPermissionCheck, setLastPermissionCheck] = useState<string>('');
 
   useEffect(() => {
     saveState(STORAGE_KEY, state);
   }, [state]);
 
-  const visibleTags = useMemo(() => {
-    const all = new Set<string>();
-    state.rows.forEach((row) => {
-      row.tags.forEach((tag) => all.add(tag));
-    });
-    return Array.from(all).sort((a, b) => a.localeCompare(b));
-  }, [state.rows]);
+  const currentRow = useMemo(() => state.rows.find((row) => row.id === state.currentId), [state.currentId, state.rows]);
 
-  const activeOrder = useMemo(
-    () => computeActiveOrder(state.rows, state.queue),
-    [state.rows, state.queue.order]
-  );
-
-  const filteredOrder = useMemo(
-    () => computeFilteredOrder(state.rows, state.queue),
-    [state.rows, state.queue.order, state.queue.filters.search, state.queue.filters.tags]
-  );
-
-  const currentRow = useMemo(() => {
-    if (!filteredOrder.length) return undefined;
-    const safeCursor = Math.min(state.queue.cursor, filteredOrder.length - 1);
-    const row = state.rows.find((item) => item.id === filteredOrder[safeCursor]);
-    return row ?? undefined;
-  }, [filteredOrder, state.queue.cursor, state.rows]);
-
-  useEffect(() => {
-    setState((prev) => ({
-      ...prev,
-      queue: {
-        ...prev.queue,
-        order: activeOrder,
-        cursor: Math.min(prev.queue.cursor, Math.max(activeOrder.length - 1, 0)),
+  const counts = useMemo(() => {
+    return state.rows.reduce(
+      (acc, row) => {
+        acc[row.status] += 1;
+        return acc;
       },
-    }));
-  }, [activeOrder.length]);
-
-  const now = Date.now();
-  const progressStats = useMemo(() => {
-    const totals = { pending: 0, opened: 0, posted: 0, verified: 0, failed: 0 };
-    state.rows.forEach((row) => {
-      switch (row.status.type) {
-        case 'verified':
-          totals.verified += 1;
-          break;
-        case 'posted':
-          totals.posted += 1;
-          break;
-        case 'opened':
-          totals.opened += 1;
-          break;
-        case 'failed':
-          totals.failed += 1;
-          break;
-        default:
-          totals.pending += 1;
-      }
-    });
-    return totals;
+      { pending: 0, posted: 0, skipped: 0, failed: 0 }
+    );
   }, [state.rows]);
 
-  const cooldownBadge = currentRow ? getCooldownDetails(currentRow, now) : undefined;
+  const total = state.rows.length;
+  const filteredRows = useMemo(() => {
+    const query = state.search.trim().toLowerCase();
+    return state.rows.filter((row) => {
+      const matchesFilter = state.filter === 'all' ? true : row.status === state.filter;
+      const matchesSearch = !query || `${row.name} ${row.url}`.toLowerCase().includes(query);
+      return matchesFilter && matchesSearch;
+    });
+  }, [state.filter, state.rows, state.search]);
 
-  const updateRow = useCallback((id: string, updater: (row: GroupRow) => GroupRow) => {
+  const setCurrentToFirstPending = useCallback(
+    (rows: QueueRow[]): string | null => {
+      const pendingRow = rows.find((row) => row.status === 'pending');
+      return pendingRow ? pendingRow.id : rows[0]?.id ?? null;
+    },
+    []
+  );
+
+  const updateRow = useCallback((id: string, updater: (row: QueueRow) => QueueRow) => {
     setState((prev) => ({
       ...prev,
       rows: prev.rows.map((row) => (row.id === id ? updater(row) : row)),
     }));
   }, []);
 
-  const advanceCursor = useCallback((afterIndex?: number) => {
-    setState((prev) => {
-      const order = computeFilteredOrder(prev.rows, prev.queue);
-      if (!order.length) {
-        return {
-          ...prev,
-          queue: { ...prev.queue, cursor: 0 },
-        };
-      }
-      const startingIndex = typeof afterIndex === 'number' ? afterIndex : prev.queue.cursor;
-      const nextIndex = findNextEligibleIndex(order, startingIndex, prev.rows);
-      return {
-        ...prev,
-        queue: {
-          ...prev.queue,
-          cursor: nextIndex,
-        },
-      };
-    });
+  const clearUndoTimer = useCallback((id: string) => {
+    const timer = undoTimers.current[id];
+    if (timer) {
+      clearTimeout(timer);
+      delete undoTimers.current[id];
+    }
   }, []);
 
-  const handleCopyAndOpen = useCallback(async () => {
-    if (!currentRow) {
-      push('Nothing queued right now.', 'info');
-      return;
-    }
+  const scheduleUndoExpiry = useCallback(
+    (id: string) => {
+      clearUndoTimer(id);
+      const timer = window.setTimeout(() => {
+        setState((prev) => ({
+          ...prev,
+          rows: prev.rows.map((row) => (row.id === id ? { ...row, undoExpiresAt: undefined } : row)),
+        }));
+        delete undoTimers.current[id];
+      }, UNDO_DURATION_MS);
+      undoTimers.current[id] = timer;
+    },
+    [clearUndoTimer]
+  );
 
-    if (!currentRow.ad.trim()) {
-      push('Add post copy before copying.', 'error');
-      return;
-    }
+  const findNextPendingId = useCallback(
+    (rows: QueueRow[], afterId?: string | null): string | null => {
+      if (!rows.length) return null;
+      const pendingIds = rows.filter((row) => row.status === 'pending').map((row) => row.id);
+      if (!pendingIds.length) return null;
+      const startIndex = afterId ? rows.findIndex((row) => row.id === afterId) : -1;
+      for (let offset = 1; offset <= rows.length; offset += 1) {
+        const idx = (startIndex + offset) % rows.length;
+        const candidate = rows[idx];
+        if (candidate && candidate.status === 'pending') return candidate.id;
+      }
+      return pendingIds[0] ?? null;
+    },
+    []
+  );
 
-    const cooldown = getCooldownDetails(currentRow, Date.now());
-    if (cooldown?.blocked) {
-      push(`Cooldown active for ${cooldown.label}.`, 'error');
-      return;
-    }
-
-    const permission = await probeClipboardPermission();
-    if (permission === 'denied') {
-      push('Clipboard permission denied. Long-press to paste manually.', 'error');
-    } else if (permission === 'prompt' && lastPermissionCheck !== currentRow.id) {
-      push('Clipboard permission prompt incoming.', 'info');
-      setLastPermissionCheck(currentRow.id);
-    }
-
-    const copyPromise = copyText(currentRow.ad);
-    updateRow(
-      currentRow.id,
-      (row) =>
-        appendHistory(
-          {
+  const setRowStatus = useCallback(
+    (id: string, status: RowStatusKind, advance = true) => {
+      const now = new Date().toISOString();
+      setState((prev) => {
+        const rows = prev.rows.map((row) => {
+          if (row.id !== id) return row;
+          return {
             ...row,
-            status: { type: 'copied' },
-          },
-          'copied'
-        )
-    );
-
-    let nextTabUrl: string | null = null;
-
-    if (isValidHttpUrl(currentRow.url)) {
-      const payload = encodePostCopyToUriComponent(currentRow.ad);
-      nextTabUrl = appendPostToUrl(currentRow.url, payload);
-    } else if (currentRow.url.trim()) {
-      push('URL must start with http:// or https://', 'error');
-    }
-
-    const result = await copyPromise;
-    if (result.success) {
-      push(result.method === 'navigator' ? 'Copied via clipboard API.' : 'Copied via fallback selection.', 'success');
-
-      if (nextTabUrl) {
-        window.open(nextTabUrl, '_blank', 'noopener,noreferrer');
-        updateRow(currentRow.id, (row) => appendHistory({ ...row, status: { type: 'opened' } }, 'opened'));
-      }
-    } else {
-      push('Copy failed. Please copy manually.', 'error');
-      updateRow(currentRow.id, (row) => appendHistory({ ...row, status: { type: 'failed', reason: 'copy-failed' } }, 'failed', 'Copy failed'));
-    }
-  }, [currentRow, lastPermissionCheck, push, updateRow]);
-
-  const handleOpenNewWorkspaceTab = useCallback(() => {
-    window.open(window.location.href, '_blank', 'noopener,noreferrer');
-    push('Opened Paste Happy in a new tab.', 'info');
-  }, [push]);
-
-  const handleMarkPosted = useCallback(() => {
-    if (!currentRow) {
-      return;
-    }
-    const postedAt = new Date().toISOString();
-    const jitterMinutes = computeJitterMinutes(currentRow.cooldownHours);
-    const nextEligible = new Date(Date.now() + currentRow.cooldownHours * 3600_000 + jitterMinutes * 60_000).toISOString();
-
-    updateRow(currentRow.id, (row) => {
-      const withPosted = appendHistory({ ...row, status: { type: 'posted' } }, 'posted');
-      const verified: GroupRow = {
-        ...withPosted,
-        status: { type: 'verified' },
-        lastPostedAt: postedAt,
-        nextEligibleAt: nextEligible,
-        retries: row.retries,
-      };
-      return appendHistory(verified, 'verified', `Cooldown ${row.cooldownHours}h + ${jitterMinutes}m jitter`);
-    });
-    push('Marked as posted and verified.', 'success');
-
-    if (!state.queue.paused) {
-      advanceCursor();
-    }
-  }, [advanceCursor, currentRow, push, state.queue.paused, updateRow]);
-
-  const handleSkip = useCallback(() => {
-    if (!currentRow) return;
-    updateRow(currentRow.id, (row) => appendHistory(row, 'skip'));
-    setState((prev) => {
-      const id = currentRow.id;
-      const baseOrder = prev.queue.order.length ? prev.queue.order : prev.rows.map((row) => row.id);
-      const nextOrder = baseOrder.filter((item) => item !== id);
-      nextOrder.push(id);
-      return {
-        ...prev,
-        queue: {
-          ...prev.queue,
-          order: nextOrder,
-          cursor: Math.min(prev.queue.cursor, Math.max(nextOrder.length - 1, 0)),
-        },
-      };
-    });
-    push('Skipped and moved to back of queue.', 'info');
-    advanceCursor();
-  }, [advanceCursor, currentRow, filteredOrder, push, updateRow]);
-
-  const handleRetry = useCallback(
-    (row: GroupRow) => {
-      updateRow(row.id, (current) => {
-        const reset: GroupRow = {
-          ...current,
-          status: { type: 'pending' },
-          retries: current.retries + 1,
-          nextEligibleAt: undefined,
-        };
-        return appendHistory(reset, 'retry');
+            status,
+            lastChangedAt: now,
+            undoExpiresAt: Date.now() + UNDO_DURATION_MS,
+            history: [...row.history, { action: status, at: now }],
+          };
+        });
+        const nextId = advance ? findNextPendingId(rows, id) : prev.currentId ?? id;
+        return { ...prev, rows, currentId: nextId };
       });
-      push('Row reset to pending.', 'success');
+      scheduleUndoExpiry(id);
     },
-    [push, updateRow]
+    [findNextPendingId, scheduleUndoExpiry]
   );
 
-  const handleFailRow = useCallback(
-    (row: GroupRow) => {
-      const reason = window.prompt('What went wrong? Provide a short note.');
-      if (!reason) return;
-      updateRow(row.id, (current) => appendHistory({ ...current, status: { type: 'failed', reason } }, 'failed', reason));
-      push('Marked as failed.', 'error');
-      if (currentRow?.id === row.id && !state.queue.paused) {
-        advanceCursor();
-      }
-    },
-    [advanceCursor, currentRow?.id, push, state.queue.paused, updateRow]
-  );
-
-  const handleChangeCooldown = useCallback(
-    (row: GroupRow, hours: number) => {
-      updateRow(row.id, (current) => ({ ...current, cooldownHours: Math.max(0, hours) }));
-    },
-    [updateRow]
-  );
-
-  const handleTagToggle = useCallback(
-    (row: GroupRow, tag: string) => {
-      const hasTag = row.tags.includes(tag);
-      updateRow(row.id, (current) => ({
-        ...current,
-        tags: hasTag ? current.tags.filter((item) => item !== tag) : [...current.tags, tag],
+  const handleUndo = useCallback(
+    (row: QueueRow) => {
+      clearUndoTimer(row.id);
+      const now = new Date().toISOString();
+      setState((prev) => ({
+        ...prev,
+        rows: prev.rows.map((item) =>
+          item.id === row.id
+            ? {
+                ...item,
+                status: 'pending',
+                undoExpiresAt: undefined,
+                lastChangedAt: now,
+                history: [...item.history, { action: 'pending', at: now, note: 'undo' }],
+              }
+            : item
+        ),
+        currentId: row.id,
       }));
     },
-    [updateRow]
+    [clearUndoTimer]
   );
 
-  const handleAddTag = useCallback(
-    (row: GroupRow) => {
-      const tag = window.prompt('Add a tag');
-      if (!tag) return;
-      const safe = tag.trim();
-      if (!safe) return;
-      updateRow(row.id, (current) => ({ ...current, tags: Array.from(new Set([...current.tags, safe])) }));
+  const handleCopyAndOpen = useCallback(
+    async (row: QueueRow) => {
+      if (!row.ad.trim()) {
+        push('Add post text before copying.', 'error');
+        return;
+      }
+
+      const result = await copyText(row.ad);
+      if (result.success) {
+        push('Post text copied.', 'success');
+      } else {
+        push('Copy failed. Please copy manually.', 'error');
+      }
+
+      setState((prev) => ({ ...prev, currentId: row.id }));
+
+      if (isValidHttpUrl(row.url)) {
+        window.open(row.url, '_blank', 'noopener,noreferrer');
+      } else if (row.url.trim()) {
+        push('URL must start with http:// or https://', 'error');
+      }
     },
-    [updateRow]
+    [push]
   );
+
+  const handleSkip = useCallback(
+    (row: QueueRow) => {
+      setRowStatus(row.id, 'skipped');
+      push('Marked as skipped.', 'info');
+    },
+    [push, setRowStatus]
+  );
+
+  const handlePosted = useCallback(
+    (row: QueueRow) => {
+      setRowStatus(row.id, 'posted');
+      push('Marked as posted.', 'success');
+    },
+    [push, setRowStatus]
+  );
+
+  const handleReset = useCallback(() => {
+    Object.values(undoTimers.current).forEach((timer) => clearTimeout(timer));
+    undoTimers.current = {};
+    setState({ rows: [], currentId: null, filter: 'all', search: '' });
+    saveState(STORAGE_KEY, { rows: [], currentId: null, filter: 'all', search: '' });
+    push('Session reset.', 'info');
+  }, [push]);
+
+  const handleShuffle = useCallback(() => {
+    setState((prev) => {
+      const pendingRows = prev.rows.filter((row) => row.status === 'pending');
+      const shuffled = shuffleArray(pendingRows);
+      const nextRows: QueueRow[] = [];
+      let pendingIndex = 0;
+      prev.rows.forEach((row) => {
+        if (row.status === 'pending') {
+          nextRows.push(shuffled[pendingIndex]);
+          pendingIndex += 1;
+        } else {
+          nextRows.push(row);
+        }
+      });
+
+      const nextCurrent = prev.currentId && nextRows.some((row) => row.id === prev.currentId)
+        ? prev.currentId
+        : setCurrentToFirstPending(nextRows);
+
+      return { ...prev, rows: nextRows, currentId: nextCurrent };
+    });
+    push('Pending rows shuffled.', 'info');
+  }, [push, setCurrentToFirstPending]);
 
   const handleSearchChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value;
-    setState((prev) => ({
-      ...prev,
-      queue: {
-        ...prev.queue,
-        cursor: 0,
-        filters: { ...prev.queue.filters, search: value },
-      },
-    }));
+    setState((prev) => ({ ...prev, search: value }));
   }, []);
 
-  const handleTagFilterToggle = useCallback((tag: string) => {
-    setState((prev) => {
-      const has = prev.queue.filters.tags.includes(tag);
-      const tags = has ? prev.queue.filters.tags.filter((item) => item !== tag) : [...prev.queue.filters.tags, tag];
-      return {
-        ...prev,
-        queue: { ...prev.queue, cursor: 0, filters: { ...prev.queue.filters, tags } },
-      };
-    });
+  const handleFilterChange = useCallback((filter: 'all' | RowStatusKind) => {
+    setState((prev) => ({ ...prev, filter }));
   }, []);
 
-  const handlePauseToggle = useCallback((paused: boolean) => {
-    setState((prev) => ({
-      ...prev,
-      queue: { ...prev.queue, paused },
-    }));
-  }, []);
-
-  const handleShuffle = useCallback(() => {
-    const seed = Date.now();
-    const shuffled = shuffleWithSeed(filteredOrder, seed);
-    setState((prev) => ({
-      ...prev,
-      queue: { ...prev.queue, order: shuffled, cursor: 0, shuffleSeed: seed },
-    }));
-    push('Queue shuffled.', 'info');
-  }, [filteredOrder, push]);
-
-  const importRows = useCallback(
+  const handleImport = useCallback(
     (entries: ParsedCsvRow[]) => {
       if (!entries.length) {
         push('No rows detected in CSV', 'error');
@@ -385,440 +253,252 @@ function InnerApp() {
       }
 
       setState((prev) => {
-        const existingById = new Map(prev.rows.map((row) => [row.id, row] as const));
-        const merged: GroupRow[] = entries.map((entry) => {
-          const base: GroupRow = existingById.get(entry.id ?? '') ?? {
-            id: entry.id ?? createId(),
-            name: '',
-            url: '',
-            ad: '',
-            tags: [],
-            cooldownHours: DEFAULT_COOLDOWN_HOURS,
-            retries: 0,
-            status: { type: 'pending' },
-            history: [],
-          };
+        const keyed = new Map<string, QueueRow>();
+        prev.rows.forEach((row) => {
+          keyed.set(makeMergeKey(row.name, row.url), row);
+        });
 
-          const status: RowStatus = entry.status
-            ? entry.status === 'failed'
-              ? { type: 'failed', reason: entry.failureReason }
-              : { type: entry.status }
-            : base.status.type === 'failed'
-            ? base.status
-            : { type: 'pending' };
+        const merged: QueueRow[] = entries.map((entry) => {
+          const key = makeMergeKey(entry.name ?? '', entry.url ?? '');
+          const existing = keyed.get(key);
+          const history = 'history' in entry && Array.isArray((entry as any).history) ? (entry as any).history : [];
+          const status = (entry as any).status as RowStatusKind | undefined;
+          const safeStatus: RowStatusKind = status && ['pending', 'posted', 'skipped', 'failed'].includes(status)
+            ? status
+            : existing?.status ?? 'pending';
+          const id = (entry as any).id ?? existing?.id ?? createId();
+          const lastChangedAt = history.length ? history[history.length - 1].at : existing?.lastChangedAt;
 
           return {
-            ...base,
-            name: entry.name ?? base.name,
-            url: entry.url ?? base.url,
-            ad: entry.ad ?? base.ad,
-            tags: entry.tags?.length ? Array.from(new Set(entry.tags)) : base.tags,
-            cooldownHours: entry.cooldownHours ?? base.cooldownHours ?? DEFAULT_COOLDOWN_HOURS,
-            retries: entry.retries ?? base.retries ?? 0,
-            lastPostedAt: entry.lastPostedAt ?? base.lastPostedAt,
-            nextEligibleAt: entry.nextEligibleAt ?? base.nextEligibleAt,
-            status,
-            history: entry.history?.length ? entry.history : base.history ?? [],
+            id,
+            name: entry.name ?? existing?.name ?? '',
+            url: entry.url ?? existing?.url ?? '',
+            ad: entry.ad ?? (existing?.ad ?? ''),
+            status: safeStatus,
+            history: history.length ? history : existing?.history ?? [],
+            lastChangedAt,
           };
         });
 
-        const mergedOrder = merged.map((row) => row.id);
-        return {
-          rows: merged,
-          queue: {
-            ...prev.queue,
-            order: mergedOrder,
-            cursor: 0,
-          },
-        };
+        const nextCurrent = merged.length
+          ? prev.currentId && merged.some((row) => row.id === prev.currentId)
+            ? prev.currentId
+            : setCurrentToFirstPending(merged)
+          : null;
+        return { ...prev, rows: merged, currentId: nextCurrent };
       });
+
       push(`Imported ${entries.length} row${entries.length === 1 ? '' : 's'}.`, 'success');
     },
-    [push]
+    [push, setCurrentToFirstPending]
   );
 
   const handleCsvFile = useCallback(
     async (file: File) => {
       const text = await file.text();
       const parsed = parseCsvRows(text);
-      importRows(parsed);
+      handleImport(parsed);
     },
-    [importRows]
+    [handleImport]
   );
 
-  const handleExport = useCallback(() => {
+  const handleExportLog = useCallback(() => {
     if (!state.rows.length) {
       push('Nothing to export yet.', 'info');
       return;
     }
-    const csv = createCsv(
-      state.rows.map((row) => ({
-        id: row.id,
-        name: row.name,
-        url: row.url,
-        ad: row.ad,
-        tags: row.tags,
-        cooldownHours: row.cooldownHours,
-        retries: row.retries,
-        lastPostedAt: row.lastPostedAt,
-        nextEligibleAt: row.nextEligibleAt,
-        status: row.status.type,
-        failureReason: row.status.type === 'failed' ? row.status.reason : undefined,
-        history: row.history,
-      }))
-    );
+    const header = ['Group Name', 'Group URL', 'Final Status', 'Timestamp'];
+    const csv = [
+      header,
+      ...state.rows.map((row) => {
+        const timestamp = row.lastChangedAt || row.history[row.history.length - 1]?.at || '';
+        return [row.name, row.url, row.status, timestamp].map(escapeCsvValue);
+      }),
+    ]
+      .map((columns) => columns.join(','))
+      .join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `fb-queue-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `paste-happy-log-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.click();
     URL.revokeObjectURL(url);
-    push('Exported CSV.', 'success');
+    push('Exported log CSV.', 'success');
   }, [push, state.rows]);
 
-  const handleManualAdd = useCallback(() => {
-    const name = window.prompt('Group name?')?.trim();
-    if (!name) return;
-    const url = window.prompt('Group URL? (https://...)')?.trim() ?? '';
-    const ad = window.prompt('Paste the post copy')?.trim() ?? '';
-    const newRow: GroupRow = {
-      id: createId(),
-      name,
-      url,
-      ad,
-      tags: [],
-      cooldownHours: DEFAULT_COOLDOWN_HOURS,
-      retries: 0,
-      status: { type: 'pending' },
-      history: [],
-    };
-    setState((prev) => ({
-      rows: [...prev.rows, newRow],
-      queue: { ...prev.queue, order: [...prev.queue.order, newRow.id] },
-    }));
-    push('Added row to queue.', 'success');
-  }, [push]);
-
-  const handleDeleteCurrent = useCallback(() => {
-    if (!currentRow) {
-      push('No row selected to delete.', 'info');
-      return;
-    }
-
-    setState((prev) => {
-      const nextRows = prev.rows.filter((row) => row.id !== currentRow.id);
-      const nextOrder = prev.queue.order.filter((id) => id !== currentRow.id);
-      const nextCursor = Math.min(prev.queue.cursor, Math.max(nextOrder.length - 1, 0));
-      return {
-        rows: nextRows,
-        queue: { ...prev.queue, order: nextOrder, cursor: nextCursor },
-      };
-    });
-
-    push('Removed current row from CSV.', 'success');
-  }, [currentRow, push]);
+  const handlePostEdit = useCallback((id: string, ad: string) => {
+    updateRow(id, (row) => ({ ...row, ad }));
+  }, [updateRow]);
 
   const handleFilePicker = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
 
+  const handleSetCurrent = useCallback((row: QueueRow) => {
+    setState((prev) => ({ ...prev, currentId: row.id }));
+  }, []);
+
+  const handlePasteCsv = useCallback(() => {
+    const text = window.prompt('Paste CSV contents');
+    if (!text) return;
+    const parsed = parseCsvRows(text);
+    handleImport(parsed);
+  }, [handleImport]);
+
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-6 px-4 pb-24 pt-6 text-slate-100">
+    <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-6 px-4 pb-28 pt-6 text-slate-100">
       <header className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="text-2xl font-semibold tracking-tight">FB Group Queue</h1>
-          <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={handleManualAdd}
-              className="rounded-full border border-slate-700 bg-slate-900 px-4 py-3 text-sm font-semibold uppercase tracking-wide shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
-            >
-              Add row
-            </button>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Paste Happy</h1>
+            <p className="text-sm text-slate-400">Manage Facebook group posting runs without losing your place.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={handleFilePicker}
-              className="rounded-full border border-slate-700 bg-slate-900 px-4 py-3 text-sm font-semibold uppercase tracking-wide shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
+              className="h-11 rounded-full border border-slate-700 bg-slate-900 px-4 text-sm font-semibold uppercase tracking-wide shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
             >
               Import CSV
             </button>
             <button
               type="button"
-              onClick={handleExport}
-              className="rounded-full border border-slate-700 bg-slate-900 px-4 py-3 text-sm font-semibold uppercase tracking-wide shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
+              onClick={handlePasteCsv}
+              className="h-11 rounded-full border border-slate-700 bg-slate-900 px-4 text-sm font-semibold uppercase tracking-wide shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
             >
-              Export CSV
+              Paste CSV
             </button>
-            <a
-              href={`data:text/csv;charset=utf-8,${encodeURIComponent(SAMPLE_CSV)}`}
-              download="fb-queue-sample.csv"
-              className="rounded-full border border-slate-800 bg-slate-950 px-4 py-3 text-sm font-semibold uppercase tracking-wide focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
-            >
-              Sample CSV
-            </a>
-            <a
-              href="#page-bottom"
-              className="rounded-full border border-indigo-500/60 bg-indigo-500/10 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-indigo-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
-            >
-              Jump to bottom
-            </a>
-          </div>
-        </div>
-        <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-200">
-          <p className="font-semibold uppercase tracking-wide text-slate-300">How to use Paste Happy</p>
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-slate-300">
-            <li>Import your Facebook group CSV or add rows manually, then tag or filter them as needed.</li>
-            <li>Use Copy &amp; Open to copy the post copy and jump into the next group tab.</li>
-            <li>Mark posted, retry, or skip to keep the queue accurate, and export when you need a fresh CSV.</li>
-          </ul>
-          <p className="mt-2 text-slate-400">Cooldowns, history, and filters help you stay organized while posting.</p>
-        </div>
-        <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
-          <Stat label="Pending" value={progressStats.pending} />
-          <Stat label="Opened" value={progressStats.opened} />
-          <Stat label="Posted" value={progressStats.posted} />
-          <Stat label="Verified" value={progressStats.verified} />
-          <Stat label="Failed" value={progressStats.failed} />
-        </dl>
-      </header>
-
-      <section className="sticky top-0 z-20 -mx-4 border-y border-slate-800 bg-slate-950/90 px-4 py-4 backdrop-blur">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">
-            <label className="flex w-full items-center gap-3 text-sm">
-              <span className="min-w-[5rem] text-xs uppercase tracking-wider text-slate-400">Search</span>
-              <input
-                type="search"
-                value={state.queue.filters.search}
-                onChange={handleSearchChange}
-                placeholder="Group or URL"
-                className="h-12 flex-1 rounded-full border border-slate-700 bg-slate-900 px-4 text-base focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
-              />
-            </label>
-            <Toggle
-              id="pause-toggle"
-              checked={state.queue.paused}
-              label={state.queue.paused ? 'Queue paused' : 'Queue running'}
-              onChange={handlePauseToggle}
-            />
             <button
               type="button"
-              onClick={handleShuffle}
-              className="h-12 min-w-[6rem] rounded-full border border-slate-700 bg-slate-900 px-4 text-sm font-semibold uppercase tracking-wide shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
+              onClick={handleExportLog}
+              className="h-11 rounded-full border border-slate-700 bg-slate-900 px-4 text-sm font-semibold uppercase tracking-wide shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
             >
-              Shuffle
+              Export Log as CSV
+            </button>
+            <button
+              type="button"
+              onClick={handleReset}
+              className="h-11 rounded-full border border-rose-500/70 bg-rose-500/15 px-4 text-sm font-semibold uppercase tracking-wide text-rose-100 shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-400"
+            >
+              Reset Session
             </button>
           </div>
         </div>
-        {visibleTags.length > 0 && (
-          <div className="mt-4 flex flex-wrap gap-2 text-xs uppercase tracking-wide text-slate-300">
-            {visibleTags.map((tag) => {
-              const active = state.queue.filters.tags.includes(tag);
+
+        <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+          <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+            <Stat label="Total" value={total} />
+            <Stat label="Posted" value={counts.posted} />
+            <Stat label="Skipped" value={counts.skipped} />
+            <Stat label="Pending" value={counts.pending} />
+          </dl>
+          <div className="mt-4 space-y-2">
+            <div className="flex justify-between text-xs uppercase tracking-wide text-slate-400">
+              <span>Progress</span>
+              <span>
+                {counts.posted} / {total || 1} posted
+              </span>
+            </div>
+            <div className="h-3 overflow-hidden rounded-full border border-slate-800 bg-slate-900">
+              <div
+                className="h-full bg-emerald-500"
+                style={{ width: `${total ? Math.min(100, (counts.posted / total) * 100) : 0}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <section className="sticky top-0 z-20 -mx-4 border-y border-slate-800 bg-slate-950/90 px-4 py-3 backdrop-blur">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-wide">
+            {(['all', 'pending', 'posted', 'skipped', 'failed'] as const).map((filterKey) => {
+              const active = state.filter === filterKey;
               return (
                 <button
-                  key={tag}
+                  key={filterKey}
                   type="button"
-                  onClick={() => handleTagFilterToggle(tag)}
-                  className={`h-12 rounded-full border px-4 text-sm font-semibold shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400 ${
-                    active ? 'border-sky-500/70 bg-sky-500/10 text-sky-200' : 'border-slate-700 bg-slate-900'
+                  onClick={() => handleFilterChange(filterKey)}
+                  className={`h-11 rounded-full border px-4 shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400 ${
+                    active ? 'border-sky-500/60 bg-sky-500/15 text-sky-100' : 'border-slate-700 bg-slate-900'
                   }`}
                 >
-                  #{tag}
+                  {filterKey === 'all' ? 'All' : filterKey[0].toUpperCase() + filterKey.slice(1)}
                 </button>
               );
             })}
           </div>
-        )}
-      </section>
-
-      <main className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,32rem)]">
-        <section className="space-y-3">
-          {filteredOrder.length === 0 && (
-            <p className="rounded-xl border border-dashed border-slate-700 bg-slate-900/60 p-6 text-sm text-slate-300">
-              Import a CSV or add rows manually to begin.
-            </p>
-          )}
-          {filteredOrder.map((id, index) => {
-            const row = state.rows.find((item) => item.id === id);
-            if (!row) return null;
-            const active = currentRow?.id === row.id;
-            const cooldown = getCooldownDetails(row, now);
-            return (
-              <article
-                key={row.id}
-                className={`rounded-2xl border px-4 py-4 transition focus-within:outline focus-within:outline-2 focus-within:outline-sky-400 ${
-                  active ? 'border-sky-600 bg-slate-900/80 shadow-lg' : 'border-slate-800 bg-slate-900/40'
-                }`}
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h2 className="text-lg font-semibold">{row.name || 'Untitled group'}</h2>
-                    <p className="text-xs text-slate-400">{row.url || 'No URL'}</p>
-                  </div>
-                  <StatusBadge status={row.status} />
-                </div>
-                <p className="mt-3 line-clamp-3 text-sm text-slate-200">{row.ad}</p>
-                <div className="mt-4 flex flex-wrap gap-2 text-xs">
-                  {row.tags.map((tag) => (
-                    <span key={tag} className="rounded-full border border-slate-700 bg-slate-800 px-3 py-1 text-slate-200">
-                      #{tag}
-                    </span>
-                  ))}
-                  {!row.tags.length && <span className="text-slate-500">No tags</span>}
-                </div>
-                <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-slate-400">
-                  <span>Cooldown: {row.cooldownHours}h</span>
-                  {cooldown?.label && (
-                    <span className={`rounded-full border px-3 py-1 ${cooldown.blocked ? 'border-amber-400/60 text-amber-200' : 'border-emerald-400/60 text-emerald-200'}`}>
-                      {cooldown.blocked ? `Ready in ${cooldown.label}` : `Ready • ${cooldown.label}`}
-                    </span>
-                  )}
-                  {row.lastPostedAt && <span>Last posted {new Date(row.lastPostedAt).toLocaleString()}</span>}
-                </div>
-                <div className="mt-4 flex flex-wrap gap-3 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => handleRetry(row)}
-                    className="h-12 rounded-full border border-slate-700 bg-slate-900 px-4 font-semibold uppercase tracking-wide focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
-                  >
-                    Retry
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleFailRow(row)}
-                    className="h-12 rounded-full border border-rose-500/60 bg-rose-500/10 px-4 font-semibold uppercase tracking-wide text-rose-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-400"
-                  >
-                    Fail
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleAddTag(row)}
-                    className="h-12 rounded-full border border-slate-700 bg-slate-900 px-4 font-semibold uppercase tracking-wide focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
-                  >
-                    Add tag
-                  </button>
-                  {row.tags.map((tag) => (
-                    <button
-                      key={`${row.id}-${tag}`}
-                      type="button"
-                      onClick={() => handleTagToggle(row, tag)}
-                      className="h-12 rounded-full border border-slate-800 bg-slate-900 px-4 font-semibold uppercase tracking-wide text-slate-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
-                    >
-                      Remove #{tag}
-                    </button>
-                  ))}
-                  <label className="flex h-12 items-center gap-2 rounded-full border border-slate-700 bg-slate-900 px-4 font-semibold uppercase tracking-wide focus-within:outline focus-within:outline-2 focus-within:outline-sky-400">
-                    <span className="text-xs">Cooldown</span>
-                    <input
-                      type="number"
-                      min={0}
-                      value={row.cooldownHours}
-                      onChange={(event) => handleChangeCooldown(row, Number(event.target.value))}
-                      className="w-16 bg-transparent text-base focus:outline-none"
-                    />
-                    <span className="text-xs">hours</span>
-                  </label>
-                </div>
-                {active && (
-                  <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/80 p-4 text-xs text-slate-300">
-                    <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-200">Activity log</h3>
-                    <ul className="mt-2 space-y-1">
-                      {row.history.length === 0 && <li className="text-slate-500">No activity yet.</li>}
-                      {row.history
-                        .slice()
-                        .reverse()
-                        .map((entry, idx) => (
-                          <li key={idx} className="flex justify-between gap-3">
-                            <span className="font-medium">{entry.action}</span>
-                            <span className="text-slate-500">{new Date(entry.at).toLocaleString()}</span>
-                            {entry.note && <span className="text-slate-400">{entry.note}</span>}
-                          </li>
-                        ))}
-                    </ul>
-                  </div>
-                )}
-              </article>
-            );
-          })}
-        </section>
-
-        <aside className="sticky top-[6.5rem] flex flex-col gap-4 rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-xl">
-          <h2 className="text-lg font-semibold uppercase tracking-wide text-slate-200">Queue controls</h2>
-          <p className="text-sm text-slate-300">Single queue with cooldown-aware ordering. Tap once to copy and open, then mark posted when you finish manually.</p>
-
-          <button
-            type="button"
-            onClick={handleCopyAndOpen}
-            className="h-16 rounded-full border border-sky-500/60 bg-sky-500/20 text-lg font-semibold uppercase tracking-wide text-sky-50 shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
-          >
-            Copy &amp; Open
-          </button>
-          <button
-            type="button"
-            onClick={handleMarkPosted}
-            className="h-16 rounded-full border border-emerald-500/60 bg-emerald-500/20 text-lg font-semibold uppercase tracking-wide text-emerald-50 shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400"
-          >
-            Mark posted
-          </button>
-          <button
-            type="button"
-            onClick={handleSkip}
-            className="h-16 rounded-full border border-amber-500/60 bg-amber-500/20 text-lg font-semibold uppercase tracking-wide text-amber-50 shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
-          >
-            Skip
-          </button>
-          <button
-            type="button"
-            onClick={handleDeleteCurrent}
-            className="h-16 rounded-full border border-rose-500/70 bg-rose-500/15 text-lg font-semibold uppercase tracking-wide text-rose-50 shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-400"
-          >
-            Delete from CSV
-          </button>
-
-          {currentRow ? (
-            <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-200">Now serving</h3>
-              <p className="text-lg font-semibold text-slate-50">{currentRow.name || 'Untitled group'}</p>
-              <a href={currentRow.url} target="_blank" rel="noreferrer" className="break-all text-sm text-sky-300">
-                {currentRow.url || 'No URL provided'}
-              </a>
-              <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-900/80 p-3 text-sm text-slate-200">
-                <strong className="block text-xs uppercase tracking-wide text-slate-400">Post copy</strong>
-                <p className="whitespace-pre-wrap text-base leading-relaxed">{currentRow.ad}</p>
-              </div>
-              {cooldownBadge && (
-                <div
-                  className={`rounded-full border px-4 py-2 text-center text-sm font-semibold uppercase tracking-wide ${
-                    cooldownBadge.blocked ? 'border-amber-400/60 text-amber-200' : 'border-emerald-400/60 text-emerald-200'
-                  }`}
-                >
-                  {cooldownBadge.blocked ? `On cooldown • ${cooldownBadge.label}` : `Ready • ${cooldownBadge.label}`}
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-400">
-              Queue empty. Import or add new rows to begin.
-            </div>
-          )}
-
-          <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-200">Open targets in new tab</h3>
-            <p className="rounded-lg border border-dashed border-slate-800 bg-slate-900/60 p-3 text-sm text-slate-400">
-              Copy &amp; Open now launches the group in a separate browser tab after copying your post text. The embedded preview was
-              removed to keep the page lighter.
-            </p>
+          <div className="flex flex-1 items-center gap-2 md:max-w-md">
+            <input
+              type="search"
+              value={state.search}
+              onChange={handleSearchChange}
+              placeholder="Search group or URL"
+              className="h-11 flex-1 rounded-full border border-slate-700 bg-slate-900 px-4 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
+            />
             <button
               type="button"
-              onClick={handleOpenNewWorkspaceTab}
-              className="inline-flex w-full justify-center rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
+              onClick={handleShuffle}
+              className="h-11 rounded-full border border-slate-700 bg-slate-900 px-4 text-sm font-semibold uppercase tracking-wide shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
             >
-              Open another Paste Happy tab
+              Shuffle pending
             </button>
           </div>
-        </aside>
+        </div>
+      </section>
+
+      <main className="space-y-3">
+        {filteredRows.length === 0 && (
+          <p className="rounded-xl border border-dashed border-slate-700 bg-slate-900/60 p-6 text-sm text-slate-300">
+            Import a CSV to start managing your run.
+          </p>
+        )}
+
+        <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/60">
+          <table className="min-w-full divide-y divide-slate-800 text-sm">
+            <thead className="bg-slate-900/60 text-left text-xs uppercase tracking-wide text-slate-400">
+              <tr>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Group</th>
+                <th className="px-4 py-3">Post text</th>
+                <th className="px-4 py-3">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800">
+              {filteredRows.map((row) => (
+                <RowItem
+                  key={row.id}
+                  row={row}
+                  active={row.id === state.currentId}
+                  onCopyOpen={() => handleCopyAndOpen(row)}
+                  onPosted={() => handlePosted(row)}
+                  onSkip={() => handleSkip(row)}
+                  onUndo={() => handleUndo(row)}
+                  onEdit={(text) => handlePostEdit(row.id, text)}
+                  onSelect={() => handleSetCurrent(row)}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
       </main>
+
+      {currentRow && (
+        <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-800 bg-slate-950/95 px-4 py-3 shadow-2xl backdrop-blur">
+          <div className="mx-auto flex max-w-5xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-slate-100">{currentRow.name || 'Untitled group'}</p>
+              <p className="truncate text-xs text-slate-400">{currentRow.url || 'No URL provided'}</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <ActionButton label="Copy & Open" tone="primary" onClick={() => handleCopyAndOpen(currentRow)} />
+              <ActionButton label="Mark Posted" tone="success" onClick={() => handlePosted(currentRow)} />
+              <ActionButton label="Skip" tone="muted" onClick={() => handleSkip(currentRow)} />
+            </div>
+          </div>
+        </div>
+      )}
 
       <input
         ref={fileInputRef}
@@ -833,109 +513,151 @@ function InnerApp() {
           }
         }}
       />
-      <div id="page-bottom" />
     </div>
   );
 }
 
-function appendHistory(row: GroupRow, action: RowHistoryEntry['action'], note?: string): GroupRow {
-  const historyEntry: RowHistoryEntry = { at: new Date().toISOString(), action, note };
-  return {
-    ...row,
-    history: [...row.history, historyEntry],
+function RowItem({
+  row,
+  active,
+  onCopyOpen,
+  onPosted,
+  onSkip,
+  onUndo,
+  onEdit,
+  onSelect,
+}: {
+  row: QueueRow;
+  active: boolean;
+  onCopyOpen: () => void;
+  onPosted: () => void;
+  onSkip: () => void;
+  onUndo: () => void;
+  onEdit: (text: string) => void;
+  onSelect: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(row.ad);
+
+  useEffect(() => {
+    setDraft(row.ad);
+  }, [row.ad]);
+
+  const showUndo = row.undoExpiresAt !== undefined && row.undoExpiresAt > Date.now();
+
+  return (
+    <tr className={`transition ${active ? 'bg-slate-900/80' : 'bg-transparent'}`}>
+      <td className="px-4 py-4 align-top">
+        <div className="flex flex-col gap-2">
+          <StatusBadge status={row.status} />
+          {showUndo && (
+            <button
+              type="button"
+              onClick={onUndo}
+              className="text-xs font-semibold text-sky-300 underline-offset-2 hover:underline"
+            >
+              Undo
+            </button>
+          )}
+        </div>
+      </td>
+      <td className="px-4 py-4 align-top">
+        <button type="button" onClick={onSelect} className="text-left">
+          <p className="text-sm font-semibold">{row.name || 'Untitled group'}</p>
+          <p className="text-xs text-slate-400 break-words">{row.url || 'No URL'}</p>
+          {row.lastChangedAt && (
+            <p className="mt-1 text-xs text-slate-500">Updated {new Date(row.lastChangedAt).toLocaleString()}</p>
+          )}
+        </button>
+      </td>
+      <td className="px-4 py-4 align-top">
+        <div className="space-y-2">
+          {!editing && (
+            <>
+              <p className={`text-sm text-slate-100 ${expanded ? 'whitespace-pre-wrap' : 'line-clamp-3 whitespace-pre-wrap'}`}>
+                {row.ad || 'No post text yet.'}
+              </p>
+              <div className="flex gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setExpanded((prev) => !prev)}
+                  className="font-semibold text-sky-300 underline-offset-2 hover:underline"
+                >
+                  {expanded ? 'Collapse' : 'Expand'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  className="font-semibold text-sky-300 underline-offset-2 hover:underline"
+                >
+                  Edit text
+                </button>
+              </div>
+            </>
+          )}
+          {editing && (
+            <div className="space-y-2">
+              <textarea
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                className="min-h-[120px] w-full rounded-xl border border-slate-700 bg-slate-900 p-3 text-sm text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
+              />
+              <div className="flex flex-wrap gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onEdit(draft);
+                    setEditing(false);
+                  }}
+                  className="rounded-full border border-emerald-500/60 bg-emerald-500/15 px-4 py-2 font-semibold uppercase tracking-wide text-emerald-100"
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraft(row.ad);
+                    setEditing(false);
+                  }}
+                  className="rounded-full border border-slate-700 bg-slate-900 px-4 py-2 font-semibold uppercase tracking-wide"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </td>
+      <td className="px-4 py-4 align-top">
+        <div className="flex flex-col gap-2">
+          <ActionButton label="Copy & Open" tone="primary" onClick={onCopyOpen} />
+          <ActionButton label="Mark Posted" tone="success" onClick={onPosted} />
+          <ActionButton label="Skip" tone="muted" onClick={onSkip} />
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function StatusBadge({ status }: { status: RowStatusKind }) {
+  const styles: Record<RowStatusKind, string> = {
+    pending: 'border-slate-700 bg-slate-800 text-slate-200',
+    posted: 'border-emerald-500/60 bg-emerald-500/10 text-emerald-100',
+    skipped: 'border-amber-500/60 bg-amber-500/10 text-amber-100',
+    failed: 'border-rose-500/60 bg-rose-500/10 text-rose-100',
   };
-}
-
-function appendPostToUrl(groupUrl: string, encodedPost: string): string {
-  if (groupUrl.includes('#')) {
-    const separator = groupUrl.endsWith('#') ? '' : '&';
-    return `${groupUrl}${separator}pastePost=${encodedPost}`;
-  }
-  return `${groupUrl}#pastePost=${encodedPost}`;
-}
-
-function isValidHttpUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return url.protocol === 'http:' || url.protocol === 'https:';
-  } catch (_error) {
-    return false;
-  }
-}
-
-function findNextEligibleIndex(order: string[], start: number, rows: GroupRow[]): number {
-  if (!order.length) return 0;
-  for (let offset = 1; offset <= order.length; offset += 1) {
-    const idx = (start + offset) % order.length;
-    const row = rows.find((item) => item.id === order[idx]);
-    if (!row) continue;
-    const cooldown = getCooldownDetails(row, Date.now());
-    if (row.status.type !== 'verified' && row.status.type !== 'failed' && !cooldown?.blocked) {
-      return idx;
-    }
-  }
-  return Math.min(start, order.length - 1);
-}
-
-function computeJitterMinutes(cooldownHours: number): number {
-  const maxMinutes = Math.max(5, Math.round(cooldownHours * 60 * 0.15));
-  return Math.floor(Math.random() * (maxMinutes + 1));
-}
-
-function getCooldownDetails(row: GroupRow, now: number) {
-  if (!row.nextEligibleAt) return undefined;
-  const next = new Date(row.nextEligibleAt).getTime();
-  if (Number.isNaN(next)) return undefined;
-  const diff = next - now;
-  if (diff <= 0) {
-    const hoursAgo = Math.abs(diff) / 3600_000;
-    if (!Number.isFinite(hoursAgo)) return undefined;
-    if (hoursAgo < 1) {
-      return { blocked: false, label: 'ready for pickup' };
-    }
-    return { blocked: false, label: `${hoursAgo.toFixed(1)}h past` };
-  }
-  const hours = diff / 3600_000;
-  if (hours >= 1) {
-    return { blocked: true, label: `${hours.toFixed(1)}h` };
-  }
-  const minutes = diff / 60_000;
-  return { blocked: true, label: `${Math.ceil(minutes)}m` };
-}
-
-function shuffleWithSeed(ids: string[], seed: number): string[] {
-  const result = [...ids];
-  let currentSeed = seed;
-  for (let i = result.length - 1; i > 0; i -= 1) {
-    currentSeed = (currentSeed * 1664525 + 1013904223) % 2 ** 32;
-    const random = currentSeed / 2 ** 32;
-    const j = Math.floor(random * (i + 1));
-    [result[i], result[j]] = [result[j], result[i]];
-  }
-  return result;
-}
-
-function computeActiveOrder(rows: GroupRow[], queue: QueueState): string[] {
-  if (!queue.order.length) {
-    return rows.map((row) => row.id);
-  }
-  const knownIds = new Set(rows.map((row) => row.id));
-  const deduped = queue.order.filter((id) => knownIds.has(id));
-  const missing = rows.map((row) => row.id).filter((id) => !deduped.includes(id));
-  return [...deduped, ...missing];
-}
-
-function computeFilteredOrder(rows: GroupRow[], queue: QueueState): string[] {
-  const baseOrder = computeActiveOrder(rows, queue);
-  const search = queue.filters.search.trim().toLowerCase();
-  const tagFilters = queue.filters.tags;
-  return baseOrder.filter((id) => {
-    const row = rows.find((item) => item.id === id);
-    if (!row) return false;
-    const matchesSearch = !search || `${row.name} ${row.url}`.toLowerCase().includes(search);
-    const matchesTags = !tagFilters.length || tagFilters.every((tag) => row.tags.includes(tag));
-    return matchesSearch && matchesTags;
-  });
+  const label: Record<RowStatusKind, string> = {
+    pending: 'Pending',
+    posted: 'Posted',
+    skipped: 'Skipped',
+    failed: 'Failed',
+  };
+  return (
+    <span className={`inline-flex w-fit items-center rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${styles[status]}`}>
+      {label[status]}
+    </span>
+  );
 }
 
 function Stat({ label, value }: { label: string; value: number }) {
@@ -947,24 +669,57 @@ function Stat({ label, value }: { label: string; value: number }) {
   );
 }
 
-function StatusBadge({ status }: { status: RowStatus }) {
-  switch (status.type) {
-    case 'verified':
-      return <span className="rounded-full border border-emerald-500/60 bg-emerald-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-200">Verified</span>;
-    case 'posted':
-      return <span className="rounded-full border border-emerald-400/60 bg-emerald-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-100">Posted</span>;
-    case 'opened':
-      return <span className="rounded-full border border-sky-400/60 bg-sky-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-100">Opened</span>;
-    case 'copied':
-      return <span className="rounded-full border border-indigo-400/60 bg-indigo-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-indigo-100">Copied</span>;
-    case 'failed':
-      return (
-        <span className="rounded-full border border-rose-500/60 bg-rose-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-rose-100">
-          Failed{status.reason ? `: ${status.reason}` : ''}
-        </span>
-      );
-    default:
-      return <span className="rounded-full border border-slate-700 bg-slate-800 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-200">Pending</span>;
+function ActionButton({
+  label,
+  tone,
+  onClick,
+}: {
+  label: string;
+  tone: 'primary' | 'success' | 'muted';
+  onClick: () => void;
+}) {
+  const styles: Record<'primary' | 'success' | 'muted', string> = {
+    primary: 'border-sky-500/60 bg-sky-500/15 text-sky-100',
+    success: 'border-emerald-500/60 bg-emerald-500/15 text-emerald-100',
+    muted: 'border-slate-700 bg-slate-900 text-slate-100',
+  } as const;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`min-w-[9rem] rounded-full border px-4 py-2 text-sm font-semibold uppercase tracking-wide shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400 ${styles[tone]}`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function makeMergeKey(name: string, url: string): string {
+  return `${name.trim().toLowerCase()}|${url.trim().toLowerCase()}`;
+}
+
+function shuffleArray<T>(items: T[]): T[] {
+  const result = [...items];
+  for (let i = result.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
+function escapeCsvValue(value: string): string {
+  if (value.includes(',') || value.includes('\n') || value.includes('"')) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
+function isValidHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch (error) {
+    return false;
   }
 }
 

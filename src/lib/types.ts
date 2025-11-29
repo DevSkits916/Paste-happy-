@@ -1,7 +1,7 @@
-export type RowStatusKind = 'pending' | 'copied' | 'opened' | 'posted' | 'verified' | 'failed';
+export type RowStatusKind = 'pending' | 'posted' | 'skipped' | 'failed';
 
 export interface RowHistoryEntry {
   at: string;
-  action: RowStatusKind | 'skip' | 'retry' | 'note';
+  action: RowStatusKind;
   note?: string;
 }

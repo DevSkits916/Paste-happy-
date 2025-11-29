@@ -5,27 +5,15 @@ export interface ParsedCsvRow {
   name: string;
   url: string;
   ad: string;
-  tags: string[];
-  cooldownHours?: number;
-  retries?: number;
-  lastPostedAt?: string;
-  nextEligibleAt?: string;
   status?: RowStatusKind;
-  failureReason?: string;
   history?: RowHistoryEntry[];
 }
 
 const HEADER_MAP = {
   name: ['group name', 'name'],
   url: ['group url', 'url'],
-  ad: ['ad', 'ad text', 'post'],
-  tags: ['tags', 'labels'],
-  cooldownHours: ['cooldownhours', 'cooldown', 'cooldown hours'],
-  retries: ['retries'],
-  lastPostedAt: ['lastpostedat', 'last posted at'],
-  nextEligibleAt: ['nexteligibleat', 'next eligible at', 'available at'],
+  ad: ['ad', 'ad text', 'post', 'post text'],
   status: ['status'],
-  failureReason: ['failurereason', 'failure reason'],
   history: ['history', 'log', 'logs'],
   id: ['id'],
 } as const;
@@ -52,43 +40,18 @@ export interface SerializableRow {
   name: string;
   url: string;
   ad: string;
-  tags: string[];
-  cooldownHours: number;
-  retries: number;
-  lastPostedAt?: string;
-  nextEligibleAt?: string;
   status: RowStatusKind;
-  failureReason?: string;
   history: RowHistoryEntry[];
 }
 
 export function createCsv(rows: SerializableRow[]): string {
-  const header = [
-    'ID',
-    'Group Name',
-    'Group URL',
-    'Ad',
-    'Tags',
-    'CooldownHours',
-    'Retries',
-    'LastPostedAt',
-    'NextEligibleAt',
-    'Status',
-    'FailureReason',
-    'History',
-  ];
+  const header = ['ID', 'Group Name', 'Group URL', 'Post Text', 'Status', 'History'];
   const body = rows.map((row) => [
     row.id,
     escapeCsvValue(row.name),
     escapeCsvValue(row.url),
     escapeCsvValue(row.ad),
-    escapeCsvValue(row.tags.join('|')),
-    row.cooldownHours.toString(),
-    row.retries.toString(),
-    row.lastPostedAt ?? '',
-    row.nextEligibleAt ?? '',
     row.status,
-    escapeCsvValue(row.failureReason ?? ''),
     escapeCsvValue(JSON.stringify(row.history ?? [])),
   ]);
   return [header, ...body]
@@ -105,12 +68,8 @@ function mapRow(columns: string[], indexLookup: Map<HeaderKey, number>): ParsedC
   const name = get('name').trim();
   const url = get('url').trim();
   const ad = get('ad').trim();
-  const tagsText = get('tags').trim();
-  const cooldownText = get('cooldownHours').trim();
-  const retriesText = get('retries').trim();
   const statusText = get('status').trim().toLowerCase() as RowStatusKind | '';
   const historyText = get('history').trim();
-  const failureReason = get('failureReason').trim();
   const id = get('id').trim() || undefined;
 
   return {
@@ -118,13 +77,7 @@ function mapRow(columns: string[], indexLookup: Map<HeaderKey, number>): ParsedC
     name,
     url,
     ad,
-    tags: tagsText ? tagsText.split(/[|,]/).map((tag) => tag.trim()).filter(Boolean) : [],
-    cooldownHours: cooldownText ? Number.parseFloat(cooldownText) || undefined : undefined,
-    retries: retriesText ? Number.parseInt(retriesText, 10) || undefined : undefined,
-    lastPostedAt: get('lastPostedAt').trim() || undefined,
-    nextEligibleAt: get('nextEligibleAt').trim() || undefined,
     status: isValidStatus(statusText) ? statusText : undefined,
-    failureReason: failureReason || undefined,
     history: parseHistory(historyText),
   };
 }
@@ -150,7 +103,7 @@ function parseHistory(raw: string): RowHistoryEntry[] {
 }
 
 function isValidStatus(status: string): status is RowStatusKind {
-  return ['pending', 'copied', 'opened', 'posted', 'verified', 'failed'].includes(status);
+  return ['pending', 'posted', 'skipped', 'failed'].includes(status);
 }
 
 function findHeaderIndex(header: string[], candidates: readonly string[]): number {
@@ -201,16 +154,12 @@ function parseCsv(input: string): string[][] {
       continue;
     }
 
-    if (char === '\n' || char === '\r') {
-      if (char === '\r' && data[i + 1] === '\n') {
-        i += 2;
-      } else {
-        i += 1;
-      }
+    if (char === '\n') {
       row.push(current);
       result.push(row);
       row = [];
       current = '';
+      i += 1;
       continue;
     }
 
@@ -218,24 +167,21 @@ function parseCsv(input: string): string[][] {
     i += 1;
   }
 
-  if (current.length > 0 || row.length > 0) {
-    row.push(current);
-    result.push(row);
-  }
-
-  return result.filter((r) => r.some((value) => value.trim().length > 0));
-}
-
-function stripBom(value: string): string {
-  if (value.charCodeAt(0) === 0xfeff) {
-    return value.slice(1);
-  }
-  return value;
+  row.push(current);
+  result.push(row);
+  return result;
 }
 
 function escapeCsvValue(value: string): string {
-  if (value.includes('"') || value.includes(',') || value.includes('\n')) {
-    return '"' + value.replace(/"/g, '""') + '"';
+  if (value.includes(',') || value.includes('\n') || value.includes('"')) {
+    return `"${value.replace(/"/g, '""')}"`;
   }
   return value;
+}
+
+function stripBom(text: string): string {
+  if (text.charCodeAt(0) === 0xfeff) {
+    return text.slice(1);
+  }
+  return text;
 }
