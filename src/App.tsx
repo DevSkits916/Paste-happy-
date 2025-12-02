@@ -511,9 +511,19 @@ function InnerApp() {
               <p className="truncate text-xs text-slate-400">{currentRow.url || 'No URL provided'}</p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-2">
-              <ActionButton label="Copy & Open" tone="primary" onClick={() => handleCopyAndOpen(currentRow)} />
-              <ActionButton label="Mark Posted" tone="success" onClick={() => handlePosted(currentRow)} />
-              <ActionButton label="Skip" tone="muted" onClick={() => handleSkip(currentRow)} />
+              <ActionButton
+                label="Copy & Open"
+                tone="primary"
+                size="lg"
+                onClick={() => handleCopyAndOpen(currentRow)}
+              />
+              <ActionButton
+                label="Mark Posted"
+                tone="success"
+                size="lg"
+                onClick={() => handlePosted(currentRow)}
+              />
+              <ActionButton label="Skip" tone="muted" size="lg" onClick={() => handleSkip(currentRow)} />
             </div>
           </div>
         </div>
@@ -824,21 +834,28 @@ function ActionButton({
   label,
   tone,
   onClick,
+  size = 'md',
 }: {
   label: string;
   tone: 'primary' | 'success' | 'muted';
   onClick: () => void;
+  size?: 'md' | 'lg';
 }) {
   const styles: Record<'primary' | 'success' | 'muted', string> = {
     primary: 'border-sky-500/60 bg-sky-500/15 text-sky-100',
     success: 'border-emerald-500/60 bg-emerald-500/15 text-emerald-100',
     muted: 'border-slate-700 bg-slate-900 text-slate-100',
   } as const;
+
+  const sizeStyles: Record<'md' | 'lg', string> = {
+    md: 'px-4 py-2 text-sm sm:min-w-[9rem]',
+    lg: 'px-5 py-3 text-base sm:min-w-[10.5rem]',
+  };
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`w-full rounded-full border px-4 py-2 text-sm font-semibold uppercase tracking-wide shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400 sm:w-auto sm:min-w-[9rem] ${styles[tone]}`}
+      className={`w-full rounded-full border font-semibold uppercase tracking-wide shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400 sm:w-auto ${sizeStyles[size]} ${styles[tone]}`}
     >
       {label}
     </button>
