@@ -196,6 +196,19 @@ function InnerApp() {
     [push, setRowStatus]
   );
 
+  const handleDelete = useCallback(
+    (row: QueueRow) => {
+      clearUndoTimer(row.id);
+      setState((prev) => {
+        const remaining = prev.rows.filter((item) => item.id !== row.id);
+        const nextId = findNextPendingId(remaining, row.id) ?? setCurrentToFirstPending(remaining);
+        return { ...prev, rows: remaining, currentId: nextId };
+      });
+      push('Removed group from session.', 'info');
+    },
+    [clearUndoTimer, findNextPendingId, push, setCurrentToFirstPending]
+  );
+
   const handlePosted = useCallback(
     (row: QueueRow) => {
       setRowStatus(row.id, 'posted');
@@ -559,6 +572,12 @@ function InnerApp() {
                 onClick={() => handlePosted(currentRow)}
               />
               <ActionButton label="Skip" tone="muted" size="lg" onClick={() => handleSkip(currentRow)} />
+              <ActionButton
+                label="Delete from CSV"
+                tone="danger"
+                size="lg"
+                onClick={() => handleDelete(currentRow)}
+              />
             </div>
           </div>
         </div>
@@ -872,14 +891,15 @@ function ActionButton({
   size = 'md',
 }: {
   label: string;
-  tone: 'primary' | 'success' | 'muted';
+  tone: 'primary' | 'success' | 'muted' | 'danger';
   onClick: () => void;
   size?: 'md' | 'lg';
 }) {
-  const styles: Record<'primary' | 'success' | 'muted', string> = {
+  const styles: Record<'primary' | 'success' | 'muted' | 'danger', string> = {
     primary: 'border-sky-500/60 bg-sky-500/15 text-sky-100',
     success: 'border-emerald-500/60 bg-emerald-500/15 text-emerald-100',
     muted: 'border-slate-700 bg-slate-900 text-slate-100',
+    danger: 'border-rose-500/60 bg-rose-500/15 text-rose-100',
   } as const;
 
   const sizeStyles: Record<'md' | 'lg', string> = {
