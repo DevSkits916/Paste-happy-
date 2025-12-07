@@ -327,6 +327,34 @@ function InnerApp() {
     push('Exported log CSV.', 'success');
   }, [push, state.rows]);
 
+  const handleExportRemaining = useCallback(() => {
+    const remaining = state.rows.filter((row) => row.status !== 'posted');
+    if (!remaining.length) {
+      push('All rows are marked as posted. Nothing to export.', 'info');
+      return;
+    }
+
+    const header = ['Group Name', 'Group URL', 'Post Text', 'Status', 'Timestamp'];
+    const csv = [
+      header,
+      ...remaining.map((row) => {
+        const timestamp = row.lastChangedAt || row.history[row.history.length - 1]?.at || '';
+        return [row.name, row.url, row.ad, row.status, timestamp].map(escapeCsvValue);
+      }),
+    ]
+      .map((columns) => columns.join(','))
+      .join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `paste-happy-remaining-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    push('Exported remaining rows.', 'success');
+  }, [push, state.rows]);
+
   const handlePostEdit = useCallback((id: string, ad: string) => {
     updateRow(id, (row) => ({ ...row, ad }));
   }, [updateRow]);
@@ -378,6 +406,13 @@ function InnerApp() {
               className="h-11 rounded-full border border-slate-700 bg-slate-900 px-4 text-sm font-semibold uppercase tracking-wide shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
             >
               Export Log as CSV
+            </button>
+            <button
+              type="button"
+              onClick={handleExportRemaining}
+              className="h-11 rounded-full border border-slate-700 bg-slate-900 px-4 text-sm font-semibold uppercase tracking-wide shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
+            >
+              Export Remaining CSV
             </button>
             <button
               type="button"
