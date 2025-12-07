@@ -27,6 +27,59 @@ interface AppState {
 const STORAGE_KEY = 'paste-happy-session-v3';
 const UNDO_DURATION_MS = 16000;
 
+const SAMPLE_ROWS: Array<Pick<QueueRow, 'name' | 'url' | 'ad'>> = [
+  {
+    name: 'Remote Work Allies',
+    url: 'https://www.facebook.com/groups/remoteworkallies',
+    ad: 'Hi everyone! We are sharing a toolkit for finding flexible roles this month.',
+  },
+  {
+    name: 'Makers & Builders Hub',
+    url: 'https://www.facebook.com/groups/makersbuilders',
+    ad: 'Weekly build thread is live—drop your latest demo and feedback requests here!',
+  },
+  {
+    name: 'Growth Experiments Lab',
+    url: 'https://www.facebook.com/groups/growthexperiments',
+    ad: 'We are opening a beta list for our outreach automation—DMs welcome for invites.',
+  },
+  {
+    name: 'SaaS Launchpad',
+    url: 'https://www.facebook.com/groups/saaslaunchpad',
+    ad: 'Launching a new scheduling feature this week. Would love early testers!',
+  },
+  {
+    name: 'Community Builders Collective',
+    url: 'https://www.facebook.com/groups/communitybuilderscollective',
+    ad: 'Looking for moderators to trial our onboarding templates—details inside.',
+  },
+  {
+    name: 'Design Feedback Circle',
+    url: 'https://www.facebook.com/groups/designfeedbackcircle',
+    ad: 'Sharing updated UI mockups for comments. Honest critique appreciated!',
+  },
+  {
+    name: 'No-Code Ninjas',
+    url: 'https://www.facebook.com/groups/nocodeninjas',
+    ad: 'New tutorial on automating lead capture with Airtable and Zapier—grab the guide.',
+  },
+  {
+    name: 'Agency Growth Guild',
+    url: 'https://www.facebook.com/groups/agencygrowthguild',
+    ad: 'Offering 3 case study reviews this week—comment if you want a slot.',
+  },
+  {
+    name: 'AI Tools Daily',
+    url: 'https://www.facebook.com/groups/aitoolsdaily',
+    ad: 'Sharing prompts that helped us halve response times. Copy/paste friendly!',
+  },
+  {
+    name: 'Founders Helping Founders',
+    url: 'https://www.facebook.com/groups/foundershelpingfounders',
+    ad: 'If you are hiring part-time SDRs, we compiled a shortlist—DM for the doc.',
+  },
+];
+
 function InnerApp() {
   const { push } = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -368,6 +421,21 @@ function InnerApp() {
     push('Exported remaining rows.', 'success');
   }, [push, state.rows]);
 
+  const handleDownloadSample = useCallback(() => {
+    const header = ['Group Name', 'Group URL', 'Post Text'];
+    const csv = [header, ...SAMPLE_ROWS.map((row) => [row.name, row.url, row.ad].map(escapeCsvValue))]
+      .map((columns) => columns.join(','))
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'paste-happy-sample.csv';
+    anchor.click();
+    URL.revokeObjectURL(url);
+    push('Downloaded sample CSV with 10 example groups.', 'success');
+  }, [push]);
+
   const handlePostEdit = useCallback((id: string, ad: string) => {
     updateRow(id, (row) => ({ ...row, ad }));
   }, [updateRow]);
@@ -399,6 +467,13 @@ function InnerApp() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handleDownloadSample}
+              className="h-11 rounded-full border border-sky-600/60 bg-sky-500/20 px-4 text-sm font-semibold uppercase tracking-wide text-sky-50 shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
+            >
+              Download Sample CSV
+            </button>
             <button
               type="button"
               onClick={handleFilePicker}
@@ -457,6 +532,24 @@ function InnerApp() {
                 style={{ width: `${total ? Math.min(100, (counts.posted / total) * 100) : 0}%` }}
               />
             </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-200">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-2">
+              <h2 className="text-base font-semibold text-white">How to use Paste Happy</h2>
+              <ol className="list-decimal space-y-2 pl-5">
+                <li>
+                  Download the sample CSV above or prepare your own with <strong>Group Name</strong>, <strong>Group URL</strong>, and
+                  <strong>Post Text</strong> columns.
+                </li>
+                <li>Import or paste the CSV to load rows. The app keeps your place automatically in your browser.</li>
+                <li>Click a row, use <strong>Copy &amp; Open</strong> to copy the post text, and update its status as you go.</li>
+                <li>Use <strong>Export Log</strong> to save outcomes or <strong>Export Remaining</strong> to continue later.</li>
+              </ol>
+            </div>
+            <span className="rounded-full bg-sky-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-sky-200">Agent &amp; human ready</span>
           </div>
         </div>
       </header>
@@ -953,3 +1046,4 @@ export default function App() {
     </ToastProvider>
   );
 }
+
