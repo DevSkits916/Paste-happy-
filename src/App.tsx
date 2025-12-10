@@ -436,6 +436,15 @@ function InnerApp() {
     push('Downloaded sample CSV with 10 example groups.', 'success');
   }, [push]);
 
+  const handleDownloadDiscoverUserscript = useCallback(() => {
+    const href = '/userscripts/facebook-groups-discover-export.user.js';
+    const anchor = document.createElement('a');
+    anchor.href = href;
+    anchor.download = 'facebook-groups-discover-export.user.js';
+    anchor.click();
+    push('Downloaded the Facebook Groups Discover scraper userscript.', 'success');
+  }, [push]);
+
   const handlePostEdit = useCallback((id: string, ad: string) => {
     updateRow(id, (row) => ({ ...row, ad }));
   }, [updateRow]);
@@ -473,6 +482,13 @@ function InnerApp() {
               className="h-11 rounded-full border border-sky-600/60 bg-sky-500/20 px-4 text-sm font-semibold uppercase tracking-wide text-sky-50 shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
             >
               Download Sample CSV
+            </button>
+            <button
+              type="button"
+              onClick={handleDownloadDiscoverUserscript}
+              className="h-11 rounded-full border border-slate-700 bg-slate-900 px-4 text-sm font-semibold uppercase tracking-wide shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
+            >
+              Download Discover Userscript
             </button>
             <button
               type="button"
