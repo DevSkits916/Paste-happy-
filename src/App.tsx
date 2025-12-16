@@ -486,16 +486,15 @@ function InnerApp() {
         <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-200">
           <div className="flex items-start justify-between gap-3">
             <div className="space-y-2">
-              <h2 className="text-base font-semibold text-white">Workflow tips</h2>
-              <ol className="list-decimal space-y-2 pl-5">
-                <li>
-                  Start with the sample CSV or your own file with <strong>Group Name</strong>, <strong>Group URL</strong>, and
-                  <strong>Post Text</strong> columns.
-                </li>
-                <li>Import the CSV to load rows. The app auto-saves progress in your browser.</li>
-                <li>Pick a row, use <strong>Copy &amp; Open</strong> to grab the post text, and mark statuses as you go.</li>
-                <li>Export remaining rows whenever you want to pause and resume later.</li>
-              </ol>
+              <h2 className="text-base font-semibold text-white">What Paste Happy does</h2>
+              <p>
+                Paste Happy keeps a manual Facebook group posting queue in one place. Import a CSV of group names, URLs, and
+                post text, then move down the list with Copy &amp; Open to drop your message into each group.
+              </p>
+              <p>
+                Progress is stored locally while you mark rows as Posted, Skipped, or Failed. You can export remaining items at
+                any time to pick up where you left off.
+              </p>
             </div>
             <span className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-200 ring-1 ring-slate-700">Updated layout</span>
           </div>
