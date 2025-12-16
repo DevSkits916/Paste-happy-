@@ -368,31 +368,6 @@ function InnerApp() {
     [handleImport]
   );
 
-  const handleExportLog = useCallback(() => {
-    if (!state.rows.length) {
-      push('Nothing to export yet.', 'info');
-      return;
-    }
-    const header = ['Group Name', 'Group URL', 'Final Status', 'Timestamp'];
-    const csv = [
-      header,
-      ...state.rows.map((row) => {
-        const timestamp = row.lastChangedAt || row.history[row.history.length - 1]?.at || '';
-        return [row.name, row.url, row.status, timestamp].map(escapeCsvValue);
-      }),
-    ]
-      .map((columns) => columns.join(','))
-      .join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `paste-happy-log-${new Date().toISOString().slice(0, 10)}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-    push('Exported log CSV.', 'success');
-  }, [push, state.rows]);
-
   const handleExportRemaining = useCallback(() => {
     const remaining = state.rows.filter((row) => row.status !== 'posted');
     if (!remaining.length) {
@@ -436,15 +411,6 @@ function InnerApp() {
     push('Downloaded sample CSV with 10 example groups.', 'success');
   }, [push]);
 
-  const handleDownloadDiscoverUserscript = useCallback(() => {
-    const href = '/userscripts/facebook-groups-discover-export.user.js';
-    const anchor = document.createElement('a');
-    anchor.href = href;
-    anchor.download = 'facebook-groups-discover-export.user.js';
-    anchor.click();
-    push('Downloaded the Facebook Groups Discover scraper userscript.', 'success');
-  }, [push]);
-
   const handlePostEdit = useCallback((id: string, ad: string) => {
     updateRow(id, (row) => ({ ...row, ad }));
   }, [updateRow]);
@@ -457,96 +423,62 @@ function InnerApp() {
     setState((prev) => ({ ...prev, currentId: row.id }));
   }, []);
 
-  const handlePasteCsv = useCallback(() => {
-    const text = window.prompt('Paste CSV contents');
-    if (!text) return;
-    const parsed = parseCsvRows(text);
-    handleImport(parsed);
-  }, [handleImport]);
-
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-6 px-4 pb-28 pt-6 text-slate-100">
       <header className="space-y-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <img src="/logo-fq.svg" alt="Paste Happy logo" className="h-12 w-12 rounded-2xl shadow-lg shadow-sky-900/40" />
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight">Paste Happy</h1>
-              <p className="text-sm text-slate-400">Manage Facebook group posting runs without losing your place.</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={handleDownloadSample}
-              className="h-11 rounded-full border border-sky-600/60 bg-sky-500/20 px-4 text-sm font-semibold uppercase tracking-wide text-sky-50 shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
-            >
-              Download Sample CSV
-            </button>
-            <button
-              type="button"
-              onClick={handleDownloadDiscoverUserscript}
-              className="h-11 rounded-full border border-slate-700 bg-slate-900 px-4 text-sm font-semibold uppercase tracking-wide shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
-            >
-              Download Discover Userscript
-            </button>
-            <button
-              type="button"
-              onClick={handleFilePicker}
-              className="h-11 rounded-full border border-slate-700 bg-slate-900 px-4 text-sm font-semibold uppercase tracking-wide shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
-            >
-              Import CSV
-            </button>
-            <button
-              type="button"
-              onClick={handlePasteCsv}
-              className="h-11 rounded-full border border-slate-700 bg-slate-900 px-4 text-sm font-semibold uppercase tracking-wide shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
-            >
-              Paste CSV
-            </button>
-            <button
-              type="button"
-              onClick={handleExportLog}
-              className="h-11 rounded-full border border-slate-700 bg-slate-900 px-4 text-sm font-semibold uppercase tracking-wide shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
-            >
-              Export Log as CSV
-            </button>
-            <button
-              type="button"
-              onClick={handleExportRemaining}
-              className="h-11 rounded-full border border-slate-700 bg-slate-900 px-4 text-sm font-semibold uppercase tracking-wide shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
-            >
-              Export Remaining CSV
-            </button>
-            <button
-              type="button"
-              onClick={handleReset}
-              className="h-11 rounded-full border border-rose-500/70 bg-rose-500/15 px-4 text-sm font-semibold uppercase tracking-wide text-rose-100 shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-400"
-            >
-              Reset Session
-            </button>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-          <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-            <Stat label="Total" value={total} />
-            <Stat label="Posted" value={counts.posted} />
-            <Stat label="Skipped" value={counts.skipped} />
-            <Stat label="Pending" value={counts.pending} />
-          </dl>
-          <div className="mt-4 space-y-2">
-            <div className="flex justify-between text-xs uppercase tracking-wide text-slate-400">
-              <span>Progress</span>
-              <span>
-                {counts.posted} / {total || 1} posted
+        <div className="overflow-hidden rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-950/70 to-sky-950 shadow-xl shadow-sky-900/40">
+          <div className="flex flex-col gap-6 p-6 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-start gap-4">
+              <span className="rounded-2xl bg-sky-500/10 p-3 ring-1 ring-inset ring-sky-500/30">
+                <img src="/logo-fq.svg" alt="Paste Happy logo" className="h-12 w-12" />
               </span>
+              <div className="space-y-2">
+                <p className="inline-flex items-center gap-2 rounded-full bg-slate-900/60 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-sky-100 ring-1 ring-sky-500/30">
+                  <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                  Session ready
+                </p>
+                <h1 className="text-3xl font-semibold tracking-tight text-white">Paste Happy</h1>
+                <p className="max-w-xl text-sm text-slate-300">
+                  A calmer workspace for Facebook group runs—keep your queue organized, copy posts in one click, and stay in flow.
+                </p>
+                <div className="grid grid-cols-2 gap-3 text-sm sm:flex sm:flex-wrap">
+                  <ActionPill label="Total" value={total} tone="neutral" />
+                  <ActionPill label="Pending" value={counts.pending} tone="sky" />
+                  <ActionPill label="Posted" value={counts.posted} tone="emerald" />
+                  <ActionPill label="Skipped" value={counts.skipped} tone="amber" />
+                </div>
+              </div>
             </div>
-            <div className="h-3 overflow-hidden rounded-full border border-slate-800 bg-slate-900">
-              <div
-                className="h-full bg-emerald-500"
-                style={{ width: `${total ? Math.min(100, (counts.posted / total) * 100) : 0}%` }}
-              />
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-end">
+              <button
+                type="button"
+                onClick={handleDownloadSample}
+                className="h-11 rounded-full border border-sky-400/50 bg-sky-500/20 px-4 text-sm font-semibold uppercase tracking-wide text-sky-50 shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
+              >
+                Download Sample
+              </button>
+              <button
+                type="button"
+                onClick={handleFilePicker}
+                className="h-11 rounded-full border border-slate-700 bg-slate-900 px-4 text-sm font-semibold uppercase tracking-wide shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
+              >
+                Import CSV
+              </button>
+              <button
+                type="button"
+                onClick={handleExportRemaining}
+                className="h-11 rounded-full border border-emerald-500/60 bg-emerald-500/15 px-4 text-sm font-semibold uppercase tracking-wide text-emerald-50 shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400"
+              >
+                Export Remaining
+              </button>
+              <button
+                type="button"
+                onClick={handleReset}
+                className="h-11 rounded-full border border-rose-500/70 bg-rose-500/15 px-4 text-sm font-semibold uppercase tracking-wide text-rose-100 shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-400"
+              >
+                Reset Session
+              </button>
             </div>
           </div>
         </div>
@@ -554,18 +486,18 @@ function InnerApp() {
         <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-200">
           <div className="flex items-start justify-between gap-3">
             <div className="space-y-2">
-              <h2 className="text-base font-semibold text-white">How to use Paste Happy</h2>
+              <h2 className="text-base font-semibold text-white">Workflow tips</h2>
               <ol className="list-decimal space-y-2 pl-5">
                 <li>
-                  Download the sample CSV above or prepare your own with <strong>Group Name</strong>, <strong>Group URL</strong>, and
+                  Start with the sample CSV or your own file with <strong>Group Name</strong>, <strong>Group URL</strong>, and
                   <strong>Post Text</strong> columns.
                 </li>
-                <li>Import or paste the CSV to load rows. The app keeps your place automatically in your browser.</li>
-                <li>Click a row, use <strong>Copy &amp; Open</strong> to copy the post text, and update its status as you go.</li>
-                <li>Use <strong>Export Log</strong> to save outcomes or <strong>Export Remaining</strong> to continue later.</li>
+                <li>Import the CSV to load rows. The app auto-saves progress in your browser.</li>
+                <li>Pick a row, use <strong>Copy &amp; Open</strong> to grab the post text, and mark statuses as you go.</li>
+                <li>Export remaining rows whenever you want to pause and resume later.</li>
               </ol>
             </div>
-            <span className="rounded-full bg-sky-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-sky-200">Agent &amp; human ready</span>
+            <span className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-200 ring-1 ring-slate-700">Updated layout</span>
           </div>
         </div>
       </header>
@@ -984,11 +916,26 @@ function StatusBadge({ status }: { status: RowStatusKind }) {
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function ActionPill({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: 'neutral' | 'sky' | 'emerald' | 'amber';
+}) {
+  const toneStyles: Record<'neutral' | 'sky' | 'emerald' | 'amber', string> = {
+    neutral: 'border-slate-700 bg-slate-900 text-slate-100',
+    sky: 'border-sky-500/50 bg-sky-500/10 text-sky-50',
+    emerald: 'border-emerald-500/50 bg-emerald-500/10 text-emerald-50',
+    amber: 'border-amber-500/50 bg-amber-500/10 text-amber-50',
+  };
+
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-center">
-      <dt className="text-xs uppercase tracking-wide text-slate-400">{label}</dt>
-      <dd className="mt-1 text-2xl font-semibold">{value}</dd>
+    <div className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 ${toneStyles[tone]}`}>
+      <div className="text-[11px] font-semibold uppercase tracking-wide opacity-80">{label}</div>
+      <div className="text-xl font-semibold tabular-nums">{value}</div>
     </div>
   );
 }
