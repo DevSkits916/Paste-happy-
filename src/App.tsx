@@ -27,6 +27,15 @@ interface AppState {
 const STORAGE_KEY = 'paste-happy-session-v3';
 const UNDO_DURATION_MS = 16000;
 
+const ASCII_TITLE = [
+  '  ____            _             _                 _                             ',
+  ' |  _ \\ __ _  ___| |_ ___ _ __ | |__   __ _ _ __ | |__   __ _ _ __  _   _ ___  ',
+  " | |_) / _` |/ __| __/ _ \\ '_ \\| '_ \\ / _` | '_ \\| '_ \\ / _` | '_ \\| | | / __| ",
+  ' |  __/ (_| | (__| ||  __/ |_) | | | | (_| | |_) | | | | (_| | |_) | |_| \\__ \\',
+  ' |_|   \\__,_|\\___|\\__\\___| .__/|_| |_|\\__,_| .__/|_| |_|\\__,_| .__/ \\__,_|___/',
+  '                        |_|             |_|             |_|                     ',
+].join('\n');
+
 const SAMPLE_ROWS: Array<Pick<QueueRow, 'name' | 'url' | 'ad'>> = [
   {
     name: 'Remote Work Allies',
@@ -425,6 +434,9 @@ function InnerApp() {
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-6 px-4 pb-28 pt-6 text-slate-100">
+      <pre className="whitespace-pre text-center font-mono text-xs leading-4 text-slate-400 sm:text-sm">
+        {ASCII_TITLE}
+      </pre>
       <header className="space-y-4">
         <div className="overflow-hidden rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-950/70 to-sky-950 shadow-xl shadow-sky-900/40">
           <div className="flex flex-col gap-6 p-6 lg:flex-row lg:items-center lg:justify-between">
