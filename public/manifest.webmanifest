@@ -1,0 +1,15 @@
+{
+  "name": "FB Group Queue",
+  "short_name": "Group Queue",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#0ea5e9",
+  "icons": [
+    {
+      "src": "/logo-fq.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
