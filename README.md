@@ -4,6 +4,8 @@ https://github.com/DevSkits916/Userscipt
  paste happy (free) deployed on here 
 https://paste-tmko.onrender.com
 
+
+use chat gpt to add collum with post for each group
 # FB Group Poster
 
 FB Group Poster is a mobile-first, dark-themed helper that walks you through Facebook group promotions one tap at a time. Import your CSV, copy each ad to the clipboard, and open the matching group in a new tab while tracking progress locally. The app never automates Facebook logins or posting — it only assists manual workflows.
