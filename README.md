@@ -1,3 +1,7 @@
+IMPORTANT SEE USERSCRIPT REPO FOR SCRAPING FACEBOOK GROUPS 
+https://github.com/DevSkits916/Userscipt
+
+ paste happy (free) deployed on here 
 https://paste-tmko.onrender.com
 
 # FB Group Poster
