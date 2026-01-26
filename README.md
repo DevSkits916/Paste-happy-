@@ -1,22 +1,3 @@
-IMPORTANT SEE USERSCRIPT REPO FOR SCRAPING FACEBOOK GROUPS & THEIR URLS TO CSV
-https://github.com/DevSkits916/Userscipt
-
-take csv generated from USERSCRIPT AND DO THE FOLLOWING 
-
-Add a new column called "post".
-For each row, write a unique advertisement for my GoFundMe.
-
-Rules:
-- Every ad must be written differently
-- No two rows can repeat wording
-- Do not mention rent or utilities
-- End every ad with my GoFundMe URL
-- Keep the tone natural, not copy-paste spam
-- Make at least 100 variations (or one per row if more)
-
-Save the finished CSV AND IMPORT INTO PASTEHAPPY
-
-
 
 FB Group Poster is a mobile-first, dark-themed helper that walks you through Facebook group promotions one tap at a time. Import your CSV, copy each ad to the clipboard, and open the matching group in a new tab while tracking progress locally. The app never automates Facebook logins or posting — it only assists manual workflows.
 
