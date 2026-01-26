@@ -1,9 +1,20 @@
 IMPORTANT SEE USERSCRIPT REPO FOR SCRAPING FACEBOOK GROUPS & THEIR URLS TO CSV
 https://github.com/DevSkits916/Userscipt
 
-This Repo deployed (import csv to this app)
-https://paste-tmko.onrender.com
+take csv generated from USERSCRIPT AND DO THE FOLLOWING 
 
+Add a new column called "post".
+For each row, write a unique advertisement for my GoFundMe.
+
+Rules:
+- Every ad must be written differently
+- No two rows can repeat wording
+- Do not mention rent or utilities
+- End every ad with my GoFundMe URL
+- Keep the tone natural, not copy-paste spam
+- Make at least 100 variations (or one per row if more)
+
+Save the finished CSV AND IMPORT INTO PASTEHAPPY
 
 
 
