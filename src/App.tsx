@@ -249,19 +249,6 @@ function InnerApp() {
     [push, setRowStatus]
   );
 
-  const handleDelete = useCallback(
-    (row: QueueRow) => {
-      clearUndoTimer(row.id);
-      setState((prev) => {
-        const remaining = prev.rows.filter((item) => item.id !== row.id);
-        const nextId = findNextPendingId(remaining, row.id) ?? setCurrentToFirstPending(remaining);
-        return { ...prev, rows: remaining, currentId: nextId };
-      });
-      push('Removed group from session.', 'info');
-    },
-    [clearUndoTimer, findNextPendingId, push, setCurrentToFirstPending]
-  );
-
   const handlePosted = useCallback(
     (row: QueueRow) => {
       setRowStatus(row.id, 'posted');
@@ -424,7 +411,26 @@ function InnerApp() {
   }, []);
 
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-6 px-4 pb-28 pt-6 text-slate-100">
+    <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-6 px-4 pb-10 pt-6 text-slate-100">
+      {currentRow && (
+        <section className="-mx-4 border-b border-slate-800 bg-slate-950/95 px-4 py-3 shadow-lg shadow-slate-950/40">
+          <div className="mx-auto flex max-w-5xl flex-nowrap items-center justify-start gap-2 overflow-x-auto">
+            <ActionButton
+              label="Copy & Open"
+              tone="primary"
+              size="lg"
+              onClick={() => handleCopyAndOpen(currentRow)}
+            />
+            <ActionButton
+              label="Mark Posted"
+              tone="success"
+              size="lg"
+              onClick={() => handlePosted(currentRow)}
+            />
+            <ActionButton label="Skip" tone="muted" size="lg" onClick={() => handleSkip(currentRow)} />
+          </div>
+        </section>
+      )}
       <header className="space-y-4">
         <div className="overflow-hidden rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-950/70 to-sky-950 shadow-xl shadow-sky-900/40">
           <div className="flex flex-col gap-6 p-6 lg:flex-row lg:items-center lg:justify-between">
@@ -594,38 +600,6 @@ function InnerApp() {
       <footer className="text-center text-xs text-slate-500">
         by Devskits916
       </footer>
-
-      {currentRow && (
-        <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-800 bg-slate-950/95 px-4 py-3 shadow-2xl backdrop-blur">
-          <div className="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-slate-100">{currentRow.name || 'Untitled group'}</p>
-              <p className="truncate text-xs text-slate-400">{currentRow.url || 'No URL provided'}</p>
-            </div>
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-2">
-              <ActionButton
-                label="Copy & Open"
-                tone="primary"
-                size="lg"
-                onClick={() => handleCopyAndOpen(currentRow)}
-              />
-              <ActionButton
-                label="Mark Posted"
-                tone="success"
-                size="lg"
-                onClick={() => handlePosted(currentRow)}
-              />
-              <ActionButton label="Skip" tone="muted" size="lg" onClick={() => handleSkip(currentRow)} />
-              <ActionButton
-                label="Delete from CSV"
-                tone="danger"
-                size="lg"
-                onClick={() => handleDelete(currentRow)}
-              />
-            </div>
-          </div>
-        </div>
-      )}
 
       <input
         ref={fileInputRef}
@@ -1012,4 +986,3 @@ export default function App() {
     </ToastProvider>
   );
 }
-
