@@ -103,7 +103,7 @@ const TUTORIAL_SECTIONS: TutorialSection[] = [
     description:
       'Start by exporting the group list you want to work through. Keep the original file untouched until you are ready to add content.',
     items: [
-      'Download the Facebook group scanner userscript and install it in Tampermonkey.',
+      'Download the Facebook group scanner userscript and install it in free, cross-platform Tampermonkey on iOS, PC, or Android instead of using a paid iOS userscript app.',
       'Open the Facebook groups join/discovery page and scroll until the groups you want are visible.',
       'Run the scan and export the CSV when you are finished loading groups.',
       'Confirm the file includes group_name and group_url before moving on.',
