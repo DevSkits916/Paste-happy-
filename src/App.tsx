@@ -122,35 +122,15 @@ const TUTORIAL_SECTIONS: TutorialSection[] = [
     note: 'Paste Happy works best when the downloaded CSV already includes one finished advertisement in the post column for every row.',
   },
   {
-    title: 'Part 3: Load the finished CSV into Paste Happy',
+    title: 'Part 3: Load the finished CSV into Paste Happy and post row by row',
     description:
-      'Paste Happy treats every row as a single posting unit so you can move through the queue in order.',
+      'Paste Happy treats every CSV row as a single posting unit so you can move through the queue in order and post quickly without losing your place.',
     items: [
       'Open Paste Happy and import the completed CSV file.',
       'Use the row list to review group names, URLs, and post text before posting.',
-      'Keep the queue sequential so your progress in the app matches your CSV.',
-    ],
-  },
-  {
-    title: 'Part 4: Post from the queue',
-    description:
-      'Work through the queue manually so you stay in control of what gets posted and when.',
-    items: [
-      'Select the current row in Paste Happy.',
-      'Use Copy & Open to copy the post text and open the group URL.',
-      'Paste into Facebook, confirm the content, and publish it yourself.',
-      'Return to Paste Happy and mark the row as Posted or Skip as needed.',
-    ],
-  },
-  {
-    title: 'Part 5: Good operating rules',
-    description:
-      'These habits keep the workflow easy to audit and easier to resume later.',
-    items: [
-      'Keep the CSV headers intact so imports remain predictable.',
-      'Move through rows in order instead of jumping around.',
-      'Use Export Remaining if you need to pause and come back later.',
-      'Reset the session only when you are ready to clear local progress.',
+      'Select the current row, then use Copy & Open to copy the post column to your clipboard and open the Facebook group from that same CSV row.',
+      'Paste the clipboard contents into Facebook, publish the post, then return to Paste Happy and click Mark Posted so you can move straight to the next group rapidly.',
+      'Keep the queue sequential so your progress in Paste Happy always matches the CSV.',
     ],
   },
 ] as const;
@@ -622,14 +602,14 @@ function InnerApp() {
             <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 shadow-lg shadow-slate-950/30">
               <h2 className="text-lg font-semibold text-white">Entire flow</h2>
               <p className="mt-2 text-sm text-slate-300">
-                Download userscript → Install in Tampermonkey → Scan groups → Export CSV → Add the post column → Download CSV → Upload to Paste Happy → Copy post → Open group → Post → Mark progress.
+                Download userscript → Install in Tampermonkey → Scan groups → Export CSV → Add the post column → Download CSV → Upload to Paste Happy → Copy &amp; Open the matching row → Paste and publish in Facebook → Mark Posted and continue.
               </p>
             </div>
             <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 shadow-lg shadow-slate-950/30">
               <h2 className="text-lg font-semibold text-white">Paste Happy basics</h2>
               <ul className="mt-3 space-y-2 text-sm text-slate-300">
                 <li>• Import a finished CSV when you are ready to work the queue.</li>
-                <li>• Copy &amp; Open brings the current post text and group URL together.</li>
+                <li>• Copy &amp; Open copies the post column to your clipboard and opens the Facebook group URL from that same CSV row.</li>
                 <li>• Posted, Skipped, and search filters help you resume a session quickly.</li>
                 <li>• Export Remaining creates a handoff file if you pause mid-run.</li>
               </ul>
