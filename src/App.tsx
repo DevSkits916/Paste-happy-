@@ -495,7 +495,21 @@ function InnerApp() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-end">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+              <button
+                type="button"
+                onClick={handleFilePicker}
+                className="inline-flex h-14 items-center justify-center rounded-full border border-sky-300 bg-sky-400 px-6 text-base font-bold uppercase tracking-[0.2em] text-slate-950 shadow-lg shadow-sky-500/30 transition hover:bg-sky-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-200"
+              >
+                Import CSV
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadSample}
+                className="h-11 rounded-full border border-sky-400/50 bg-sky-500/20 px-4 text-sm font-semibold uppercase tracking-wide text-sky-50 shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
+              >
+                Sample CSV
+              </button>
               <a
                 href={FACEBOOK_GROUPS_SCANNER_SCRIPT_PATH}
                 download="facebook-groups-discover-export.user.js"
@@ -503,20 +517,6 @@ function InnerApp() {
               >
                 Download Userscript
               </a>
-              <button
-                type="button"
-                onClick={handleDownloadSample}
-                className="h-11 rounded-full border border-sky-400/50 bg-sky-500/20 px-4 text-sm font-semibold uppercase tracking-wide text-sky-50 shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
-              >
-                Download Sample
-              </button>
-              <button
-                type="button"
-                onClick={handleFilePicker}
-                className="h-11 rounded-full border border-slate-700 bg-slate-900 px-4 text-sm font-semibold uppercase tracking-wide shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
-              >
-                Import CSV
-              </button>
             </div>
           </div>
         </div>
