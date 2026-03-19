@@ -312,14 +312,6 @@ function InnerApp() {
     [push, setRowStatus]
   );
 
-  const handleReset = useCallback(() => {
-    Object.values(undoTimers.current).forEach((timer) => clearTimeout(timer));
-    undoTimers.current = {};
-    setState({ rows: [], currentId: null, filter: 'all', search: '' });
-    saveState(STORAGE_KEY, { rows: [], currentId: null, filter: 'all', search: '' });
-    push('Session reset.', 'info');
-  }, [push]);
-
   const handleShuffle = useCallback(() => {
     setState((prev) => {
       const pendingRows = prev.rows.filter((row) => row.status === 'pending');
@@ -409,34 +401,6 @@ function InnerApp() {
     },
     [handleImport]
   );
-
-  const handleExportRemaining = useCallback(() => {
-    const remaining = state.rows.filter((row) => row.status !== 'posted');
-    if (!remaining.length) {
-      push('All rows are marked as posted. Nothing to export.', 'info');
-      return;
-    }
-
-    const header = ['Group Name', 'Group URL', 'Post Text', 'Status', 'Timestamp'];
-    const csv = [
-      header,
-      ...remaining.map((row) => {
-        const timestamp = row.lastChangedAt || row.history[row.history.length - 1]?.at || '';
-        return [row.name, row.url, row.ad, row.status, timestamp].map(escapeCsvValue);
-      }),
-    ]
-      .map((columns) => columns.join(','))
-      .join('\n');
-
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `paste-happy-remaining-${new Date().toISOString().slice(0, 10)}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-    push('Exported remaining rows.', 'success');
-  }, [push, state.rows]);
 
   const handleDownloadSample = useCallback(() => {
     const header = ['Group Name', 'Group URL', 'Post Text'];
@@ -552,20 +516,6 @@ function InnerApp() {
                 className="h-11 rounded-full border border-slate-700 bg-slate-900 px-4 text-sm font-semibold uppercase tracking-wide shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
               >
                 Import CSV
-              </button>
-              <button
-                type="button"
-                onClick={handleExportRemaining}
-                className="h-11 rounded-full border border-emerald-500/60 bg-emerald-500/15 px-4 text-sm font-semibold uppercase tracking-wide text-emerald-50 shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400"
-              >
-                Export Remaining
-              </button>
-              <button
-                type="button"
-                onClick={handleReset}
-                className="h-11 rounded-full border border-rose-500/70 bg-rose-500/15 px-4 text-sm font-semibold uppercase tracking-wide text-rose-100 shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-400"
-              >
-                Reset Session
               </button>
             </div>
           </div>
