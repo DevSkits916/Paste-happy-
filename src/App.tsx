@@ -456,9 +456,6 @@ function InnerApp() {
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-2">
                 <h2 className="text-xl font-semibold text-white">Tutorial</h2>
-                <p className="max-w-2xl text-sm text-slate-300">
-                  This replaces the old product blurb with a practical runbook for how Paste Happy fits into a Facebook group posting workflow.
-                </p>
               </div>
               <span className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-200 ring-1 ring-slate-700">
                 Top to bottom
@@ -466,6 +463,9 @@ function InnerApp() {
             </div>
 
             <div className="mt-5 space-y-4">
+              <p className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+                You can download the sample CSV and import it to see how Paste Happy works, or adapt it for your own Facebook groups and ads by following the tutorial below.
+              </p>
               {TUTORIAL_SECTIONS.map((section) => (
                 <article key={section.title} className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
                   <h3 className="text-base font-semibold text-white">{section.title}</h3>
