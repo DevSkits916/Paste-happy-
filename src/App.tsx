@@ -88,6 +88,8 @@ const PIPELINE_STEPS = [
   'Manual Facebook posting',
 ] as const;
 
+const FACEBOOK_GROUPS_SCANNER_SCRIPT_PATH = '/userscripts/facebook-groups-discover-export.user.js';
+
 interface TutorialSection {
   title: string;
   description: string;
@@ -101,7 +103,7 @@ const TUTORIAL_SECTIONS: TutorialSection[] = [
     description:
       'Start by exporting the group list you want to work through. Keep the original file untouched until you are ready to add content.',
     items: [
-      'Install and enable your Facebook group scanner userscript in Tampermonkey.',
+      'Download the Facebook group scanner userscript and install it in Tampermonkey.',
       'Open the Facebook groups join/discovery page and scroll until the groups you want are visible.',
       'Run the scan and export the CSV when you are finished loading groups.',
       'Confirm the file includes group_name and group_url before moving on.',
@@ -537,6 +539,13 @@ function InnerApp() {
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-end">
+              <a
+                href={FACEBOOK_GROUPS_SCANNER_SCRIPT_PATH}
+                download="facebook-groups-discover-export.user.js"
+                className="inline-flex h-11 items-center justify-center rounded-full border border-fuchsia-400/50 bg-fuchsia-500/15 px-4 text-sm font-semibold uppercase tracking-wide text-fuchsia-50 shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-fuchsia-400"
+              >
+                Download Userscript
+              </a>
               <button
                 type="button"
                 onClick={handleDownloadSample}
@@ -612,7 +621,7 @@ function InnerApp() {
             <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 shadow-lg shadow-slate-950/30">
               <h2 className="text-lg font-semibold text-white">Entire flow</h2>
               <p className="mt-2 text-sm text-slate-300">
-                Install userscript → Scan groups → Export CSV → Add the post column → Download CSV → Upload to Paste Happy → Copy post → Open group → Post → Mark progress.
+                Download userscript → Install in Tampermonkey → Scan groups → Export CSV → Add the post column → Download CSV → Upload to Paste Happy → Copy post → Open group → Post → Mark progress.
               </p>
             </div>
             <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 shadow-lg shadow-slate-950/30">

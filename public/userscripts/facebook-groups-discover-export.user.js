@@ -1,647 +1,805 @@
 // ==UserScript==
-// @name         Facebook Groups → CSV Exporter (2025-12-06)
+// @name         Facebook Groups → CSV/JSON Exporter (Enhanced v3.1 UI Fix)
 // @namespace    devskits916.fb.groups.csv
-// @version      2.0.0
-// @description  Scan Facebook group listings and export to CSV. Features: debounced scanning, duplicate detection, data persistence, dynamic UI updates, error recovery, mobile support.
+// @version      3.1.1
+// @description  Advanced Facebook group discovery scraper with modern UI + FIXED panel markup/IDs (was broken), draggable/resizable panel, theme toggle, progress, filters, robust scanning, 2025 layout compatibility.
 // @author       Calder
 // @match        https://www.facebook.com/*groups*
 // @match        https://m.facebook.com/*groups*
 // @grant        GM_setClipboard
-// @grant        GM_getValue
-// @grant        GM_setValue
-// @grant        GM_deleteValue
+// @grant        GM_addStyle
 // @run-at       document-idle
 // ==/UserScript==
 
-(function() {
+(function () {
   'use strict';
 
-  // --------- CONFIG ---------
-  const CONFIG = {
-    STORAGE_KEY: 'fbGroupsCSV_data',
-    AUTO_SCAN_DURATION: 30000,
-    SCAN_DEBOUNCE_MS: 300,
-    MUTATION_OBSERVER_THROTTLE: 800,
-    MAX_STORAGE_SIZE: 50000, // chars before cleanup
-    LOG_LEVEL: 'info', // 'debug', 'info', 'warn', 'error'
-  };
-
-  // --------- LOGGER ---------
-  const logger = {
-    debug: (msg, data) => CONFIG.LOG_LEVEL === 'debug' && console.log(`[FB-CSV] ${msg}`, data || ''),
-    info: (msg, data) => ['info', 'debug'].includes(CONFIG.LOG_LEVEL) && console.log(`[FB-CSV] ${msg}`, data || ''),
-    warn: (msg, data) => console.warn(`[FB-CSV] ⚠ ${msg}`, data || ''),
-    error: (msg, data) => console.error(`[FB-CSV] ❌ ${msg}`, data || ''),
-  };
-
-  // --------- STATE ---------
+  // --------- State ---------
   const state = {
-    items: new Map(),
+    items: new Map(), // key: groupKey, value: record
     autoscanTimer: null,
     autoscanEndAt: 0,
-    lastScanTime: 0,
-    scanPending: false,
-    initialized: false,
-    panelElement: null,
+    isScanning: false,
+    theme: 'dark',
+    panelMinimized: false,
+    settings: {
+      autoStart: false,
+      maxItems: 5000,
+      exportFormat: 'csv',
+      showProgress: true,
+      showList: false,
+      minMembers: 0,
+      activityThreshold: '' // e.g. "1 day"
+    }
   };
 
-  // --------- STORAGE LAYER ---------
-  const storage = {
-    load() {
-      try {
-        const data = GM_getValue(CONFIG.STORAGE_KEY, '{}');
-        const parsed = JSON.parse(data);
-        state.items.clear();
-        Object.entries(parsed).forEach(([k, v]) => state.items.set(k, v));
-        logger.info(`Loaded ${state.items.size} groups from storage`);
-        return state.items.size;
-      } catch (e) {
-        logger.error('Failed to load storage', e);
-        return 0;
-      }
-    },
-    save() {
-      try {
-        const obj = Object.fromEntries(state.items);
-        const json = JSON.stringify(obj);
-        if (json.length > CONFIG.MAX_STORAGE_SIZE) {
-          logger.warn(`Storage size ${json.length} > max ${CONFIG.MAX_STORAGE_SIZE}, pruning oldest entries`);
-          const entries = Array.from(state.items.entries()).sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0));
-          state.items.clear();
-          entries.slice(-Math.floor(entries.length * 0.75)).forEach(([k, v]) => state.items.set(k, v));
-        }
-        GM_setValue(CONFIG.STORAGE_KEY, JSON.stringify(Object.fromEntries(state.items)));
-        logger.debug(`Saved ${state.items.size} groups`);
-      } catch (e) {
-        logger.error('Failed to save storage', e);
-      }
-    },
-    clear() {
-      GM_deleteValue(CONFIG.STORAGE_KEY);
-      state.items.clear();
-      logger.info('Cleared all stored data');
-    },
-  };
-
-  // --------- UI BUILDER ---------
-  function createPanel() {
-    const panel = document.createElement('div');
-    panel.id = 'fb-groups-csv-panel';
-    panel.setAttribute('data-version', '2.0');
-
-    const styles = {
-      position: 'fixed',
-      zIndex: '999999',
-      right: '16px',
-      bottom: '16px',
-      width: '300px',
-      background: 'rgba(32,32,32,0.98)',
-      color: '#fff',
-      fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif',
-      fontSize: '13px',
-      border: '1px solid rgba(255,255,255,0.2)',
-      borderRadius: '12px',
-      boxShadow: '0 12px 32px rgba(0,0,0,0.4)',
-      padding: '12px',
-      backdropFilter: 'blur(4px)',
-      maxHeight: '80vh',
-      overflowY: 'auto',
-    };
-    Object.assign(panel.style, styles);
-
-    panel.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;cursor:move;user-select:none;" id="fb-groups-csv-drag">
-        <div style="display:flex;align-items:center;gap:6px;">
-          <strong>Groups → CSV</strong>
-          <span style="font-size:11px;opacity:0.6;padding:2px 6px;background:rgba(255,255,255,0.1);border-radius:4px;">v2.0</span>
-        </div>
-        <span id="fb-groups-csv-count" style="font-weight:bold;background:rgba(76,175,80,0.3);padding:2px 8px;border-radius:4px;font-size:12px;">0</span>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
-        <button id="fb-groups-csv-scan" class="fb-csv-btn fb-csv-btn-primary" style="grid-column:1;">Scan</button>
-        <button id="fb-groups-csv-autoscan" class="fb-csv-btn fb-csv-btn-primary" style="grid-column:2;" title="Auto-scroll & scan for 30s">Auto-scan</button>
-        <button id="fb-groups-csv-export" class="fb-csv-btn fb-csv-btn-success" style="grid-column:1;">Export CSV</button>
-        <button id="fb-groups-csv-copy" class="fb-csv-btn fb-csv-btn-secondary" style="grid-column:2;">Copy</button>
-        <button id="fb-groups-csv-clear" class="fb-csv-btn fb-csv-btn-danger" style="grid-column:1;">Clear</button>
-        <button id="fb-groups-csv-help" class="fb-csv-btn fb-csv-btn-secondary" style="grid-column:2;" title="Show tips">?</button>
-      </div>
-      <div id="fb-groups-csv-status" style="font-size:12px;opacity:0.85;padding:8px;background:rgba(255,255,255,0.05);border-radius:6px;margin-bottom:8px;line-height:1.4;">Ready</div>
-      <details style="font-size:11px;opacity:0.75;">
-        <summary style="cursor:pointer;margin:4px 0;">Stats</summary>
-        <div style="padding:6px;background:rgba(0,0,0,0.2);border-radius:4px;margin-top:4px;line-height:1.6;">
-          <div>Total: <strong id="fb-groups-csv-stat-total">0</strong></div>
-          <div>Avg members: <strong id="fb-groups-csv-stat-avg">-</strong></div>
-          <div>Last scan: <strong id="fb-groups-csv-stat-lastscan">never</strong></div>
-        </div>
-      </details>
-    `;
-
-    // Button styles
-    const btnStyles = `
-      <style>
-        .fb-csv-btn {
-          padding: 8px 12px;
-          border: 1px solid rgba(255,255,255,0.2);
-          border-radius: 8px;
-          background: rgba(100,100,100,0.3);
-          color: #fff;
-          cursor: pointer;
-          font-size: 12px;
-          font-weight: 500;
-          transition: all 150ms ease;
-          white-space: nowrap;
-        }
-        .fb-csv-btn:hover {
-          background: rgba(100,100,100,0.5);
-          border-color: rgba(255,255,255,0.3);
-          transform: translateY(-1px);
-        }
-        .fb-csv-btn:active {
-          transform: translateY(0);
-        }
-        .fb-csv-btn:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-        .fb-csv-btn-primary {
-          background: rgba(66,133,244,0.4);
-          border-color: rgba(66,133,244,0.6);
-        }
-        .fb-csv-btn-primary:hover {
-          background: rgba(66,133,244,0.6);
-        }
-        .fb-csv-btn-success {
-          background: rgba(76,175,80,0.4);
-          border-color: rgba(76,175,80,0.6);
-        }
-        .fb-csv-btn-success:hover {
-          background: rgba(76,175,80,0.6);
-        }
-        .fb-csv-btn-danger {
-          background: rgba(244,67,54,0.3);
-          border-color: rgba(244,67,54,0.5);
-        }
-        .fb-csv-btn-danger:hover {
-          background: rgba(244,67,54,0.5);
-          color: #ffcccc;
-        }
-        .fb-csv-btn-secondary {
-          background: rgba(158,158,158,0.3);
-          border-color: rgba(158,158,158,0.5);
-        }
-        .fb-csv-btn-secondary:hover {
-          background: rgba(158,158,158,0.5);
-        }
-        #fb-groups-csv-panel {
-          scrollbar-width: thin;
-          scrollbar-color: rgba(255,255,255,0.2) transparent;
-        }
-        #fb-groups-csv-panel::-webkit-scrollbar {
-          width: 6px;
-        }
-        #fb-groups-csv-panel::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        #fb-groups-csv-panel::-webkit-scrollbar-thumb {
-          background: rgba(255,255,255,0.2);
-          border-radius: 3px;
-        }
-      </style>
-    `;
-    document.head.insertAdjacentHTML('beforeend', btnStyles);
-
-    document.body.appendChild(panel);
-    state.panelElement = panel;
-
-    // Dragging
-    setupDragging(panel);
-
-    // Button handlers
-    setupButtonHandlers(panel);
-
-    logger.info('Panel created');
-    return panel;
+  // --------- Storage ---------
+  function loadSettings() {
+    try {
+      const saved = localStorage.getItem('fb-groups-scraper-settings-v3');
+      if (saved) Object.assign(state.settings, JSON.parse(saved));
+    } catch (e) { console.error('Load settings error:', e); }
   }
 
-  function setupDragging(panel) {
-    const drag = panel.querySelector('#fb-groups-csv-drag');
-    let dragging = false;
-    let startX = 0, startY = 0, startRight = 0, startBottom = 0;
+  function saveSettings() {
+    try {
+      localStorage.setItem('fb-groups-scraper-settings-v3', JSON.stringify(state.settings));
+    } catch (e) { console.error('Save settings error:', e); }
+  }
 
-    drag.addEventListener('pointerdown', e => {
+  // --------- UI Creation (FIXED) ---------
+  function createPanel() {
+    const panel = document.createElement('div');
+    panel.id = 'fb-groups-scraper-panel';
+
+    // NOTE: The previous script’s UI was “broken” because it injected a bunch of raw text
+    // without the IDs/classes your CSS + event hooks expect. Humans: undefeated at mismatch bugs.
+    panel.innerHTML = `
+      <div id="fb-groups-scraper-header">
+        <div class="title">
+          <span aria-hidden="true">📊</span>
+          <span>Groups Exporter</span>
+          <span class="pill" title="Collected groups">
+            <span id="fb-groups-scraper-count">0</span>
+          </span>
+        </div>
+        <div class="controls">
+          <button id="fb-groups-scraper-theme" title="Toggle theme" type="button">🌙</button>
+          <button id="fb-groups-scraper-minimize" title="Minimize" type="button">▁</button>
+          <button id="fb-groups-scraper-close" title="Close" type="button">✕</button>
+        </div>
+      </div>
+
+      <div id="fb-groups-scraper-body">
+        <div class="section buttons">
+          <button id="fb-groups-scraper-scan" type="button">🔍 Scan Visible</button>
+          <button id="fb-groups-scraper-autoscan" type="button">🤖 Auto-Scan (2min)</button>
+          <button id="fb-groups-scraper-export" type="button">📤 Export</button>
+          <button id="fb-groups-scraper-copy" type="button">📋 Copy</button>
+          <button id="fb-groups-scraper-clear" type="button">🗑️ Clear</button>
+        </div>
+
+        <div class="section filters">
+          <label>
+            Min members:
+            <input id="fb-groups-scraper-minmembers" inputmode="numeric" type="number" min="0" step="1" placeholder="0" />
+          </label>
+
+          <label>
+            Active within:
+            <input id="fb-groups-scraper-activity" type="text" placeholder="e.g. 1 day / 1 week" />
+          </label>
+
+          <label>
+            Format:
+            <select id="fb-groups-scraper-format">
+              <option value="csv">CSV</option>
+              <option value="json">JSON</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="section toggles">
+          <label class="toggle">
+            <input id="fb-groups-scraper-showprogress" type="checkbox" />
+            <span>Show progress</span>
+          </label>
+
+          <label class="toggle">
+            <input id="fb-groups-scraper-showlist" type="checkbox" />
+            <span>Show list</span>
+          </label>
+        </div>
+
+        <div class="progress-container">
+          <div class="progress-bar">
+            <div class="fill"></div>
+          </div>
+        </div>
+
+        <div class="list-container">
+          <div class="list" id="fb-groups-scraper-list"></div>
+        </div>
+
+        <div class="status" id="fb-groups-scraper-status">Ready 🚀</div>
+      </div>
+    `;
+
+    document.body.appendChild(panel);
+    addStyles();
+    attachEvents(panel);
+
+    // Apply saved UI state
+    panel.classList.toggle('minimized', !!state.panelMinimized);
+    updateTheme();
+    syncUIFromSettings();
+    updateCount();
+    updateProgress();
+    updateList();
+  }
+
+  function addStyles() {
+    GM_addStyle(`
+      #fb-groups-scraper-panel {
+        position: fixed;
+        z-index: 999999;
+        right: 12px;
+        bottom: 12px;
+        width: min(380px, 92vw);
+        max-height: 80vh;
+        background: var(--bg);
+        color: var(--text);
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-size: 14px;
+        border-radius: 16px;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+        padding: 0;
+        overflow: hidden;
+        transition: transform 0.15s ease, opacity 0.15s ease;
+        resize: both;
+        min-width: 280px;
+        min-height: 140px;
+        touch-action: none;
+      }
+
+      #fb-groups-scraper-panel.minimized {
+        height: 44px !important;
+        resize: none !important;
+      }
+      #fb-groups-scraper-panel.minimized #fb-groups-scraper-body {
+        display: none;
+      }
+
+      #fb-groups-scraper-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 14px;
+        background: var(--header-bg);
+        cursor: move;
+        user-select: none;
+        border-bottom: 1px solid var(--border);
+      }
+
+      #fb-groups-scraper-header .title {
+        font-weight: 650;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      #fb-groups-scraper-header .title span:nth-child(2) {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 180px;
+      }
+
+      #fb-groups-scraper-header .pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: var(--bg-secondary);
+        color: var(--text);
+        font-variant-numeric: tabular-nums;
+      }
+
+      #fb-groups-scraper-header .controls button {
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        font-size: 18px;
+        cursor: pointer;
+        padding: 6px;
+        margin-left: 6px;
+        border-radius: 10px;
+        transition: background 0.15s, color 0.15s;
+      }
+      #fb-groups-scraper-header .controls button:hover {
+        color: var(--text);
+        background: var(--btn-hover);
+      }
+
+      #fb-groups-scraper-body {
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        overflow: auto;
+        max-height: calc(80vh - 44px);
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
+      }
+
+      .section.buttons {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .section.buttons button,
+      .section.filters select,
+      .section.filters input {
+        padding: 10px 10px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: var(--btn-bg);
+        color: var(--text);
+        cursor: pointer;
+        font-size: 13px;
+        transition: background 0.15s, border 0.15s;
+      }
+      .section.buttons button:hover {
+        background: var(--btn-hover);
+        border-color: var(--border-hover);
+      }
+
+      .section.filters {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .section.filters label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .section.filters input,
+      .section.filters select {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .section.toggles {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      .toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-muted);
+        user-select: none;
+      }
+      .toggle input {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--progress-fill);
+      }
+
+      .progress-container { display: flex; flex-direction: column; gap: 6px; }
+      .progress-bar {
+        height: 8px;
+        background: var(--progress-bg);
+        border-radius: 999px;
+        overflow: hidden;
+        opacity: 0;
+        transition: opacity 0.2s;
+      }
+      .progress-bar.visible { opacity: 1; }
+      .progress-bar .fill {
+        height: 100%;
+        background: var(--progress-fill);
+        width: 0%;
+        transition: width 0.25s ease-out;
+      }
+
+      .list-container { display: none; flex-direction: column; gap: 6px; }
+      .list-container.visible { display: flex; }
+      .list {
+        overflow: auto;
+        max-height: 260px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 6px;
+        background: var(--bg-secondary);
+        -webkit-overflow-scrolling: touch;
+      }
+      .group-item {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 10px;
+        border-radius: 10px;
+      }
+      .group-item + .group-item { border-top: 1px solid var(--border); border-top-left-radius: 0; border-top-right-radius: 0; }
+      .group-item a { color: var(--link); text-decoration: none; font-weight: 600; }
+      .group-item a:hover { text-decoration: underline; }
+      .group-item span { font-size: 12px; color: var(--text-muted); }
+
+      .status {
+        font-size: 13px;
+        color: var(--text-muted);
+        min-height: 18px;
+        text-align: center;
+        padding-top: 2px;
+      }
+
+      /* Themes */
+      #fb-groups-scraper-panel.dark {
+        --bg: #1e1e1e;
+        --bg-secondary: #252525;
+        --header-bg: #181818;
+        --text: #e7e7e7;
+        --text-muted: #a7a7a7;
+        --border: #343434;
+        --border-hover: #4a4a4a;
+        --btn-bg: #2a2a2a;
+        --btn-hover: #343434;
+        --progress-bg: #343434;
+        --progress-fill: #4caf50;
+        --link: #4da6ff;
+      }
+      #fb-groups-scraper-panel.light {
+        --bg: #ffffff;
+        --bg-secondary: #f6f6f6;
+        --header-bg: #f1f1f1;
+        --text: #121212;
+        --text-muted: #666666;
+        --border: #dddddd;
+        --border-hover: #cfcfcf;
+        --btn-bg: #f0f0f0;
+        --btn-hover: #e7e7e7;
+        --progress-bg: #e0e0e0;
+        --progress-fill: #2e7d32;
+        --link: #0066cc;
+      }
+    `);
+  }
+
+  function updateTheme() {
+    const panel = document.getElementById('fb-groups-scraper-panel');
+    if (!panel) return;
+    panel.classList.toggle('dark', state.theme === 'dark');
+    panel.classList.toggle('light', state.theme === 'light');
+    const themeBtn = document.getElementById('fb-groups-scraper-theme');
+    if (themeBtn) themeBtn.textContent = state.theme === 'dark' ? '🌙' : '☀️';
+  }
+
+  function syncUIFromSettings() {
+    const fmt = document.getElementById('fb-groups-scraper-format');
+    const mm = document.getElementById('fb-groups-scraper-minmembers');
+    const act = document.getElementById('fb-groups-scraper-activity');
+    const sp = document.getElementById('fb-groups-scraper-showprogress');
+    const sl = document.getElementById('fb-groups-scraper-showlist');
+
+    if (fmt) fmt.value = state.settings.exportFormat;
+    if (mm) mm.value = String(state.settings.minMembers || 0);
+    if (act) act.value = state.settings.activityThreshold || '';
+    if (sp) sp.checked = !!state.settings.showProgress;
+    if (sl) sl.checked = !!state.settings.showList;
+
+    const pb = document.querySelector('.progress-bar');
+    if (pb) pb.classList.toggle('visible', !!state.settings.showProgress);
+
+    const lc = document.querySelector('.list-container');
+    if (lc) lc.classList.toggle('visible', !!state.settings.showList);
+  }
+
+  // --------- Event Attachment ---------
+  function attachEvents(panel) {
+    // Drag header (fixed for mobile)
+    const header = panel.querySelector('#fb-groups-scraper-header');
+    let dragging = false, startX = 0, startY = 0, startRight = 0, startBottom = 0;
+
+    header.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('button')) return;
       dragging = true;
       startX = e.clientX;
       startY = e.clientY;
       const rect = panel.getBoundingClientRect();
       startRight = window.innerWidth - rect.right;
       startBottom = window.innerHeight - rect.bottom;
-      panel.setPointerCapture(e.pointerId);
-      drag.style.opacity = '0.7';
+      try { header.setPointerCapture(e.pointerId); } catch {}
+      e.preventDefault();
     });
 
-    drag.addEventListener('pointermove', e => {
+    document.addEventListener('pointermove', (e) => {
       if (!dragging) return;
-      const dx = e.clientX - startX;
-      const dy = e.clientY - startY;
-      panel.style.right = Math.max(0, Math.min(window.innerWidth - 100, startRight - dx)) + 'px';
-      panel.style.bottom = Math.max(0, Math.min(window.innerHeight - 100, startBottom - dy)) + 'px';
+      panel.style.right = Math.max(0, startRight - (e.clientX - startX)) + 'px';
+      panel.style.bottom = Math.max(0, startBottom - (e.clientY - startY)) + 'px';
     });
 
-    drag.addEventListener('pointerup', () => {
-      dragging = false;
-      drag.style.opacity = '1';
-    });
-  }
+    document.addEventListener('pointerup', () => { dragging = false; });
 
-  function setupButtonHandlers(panel) {
-    panel.querySelector('#fb-groups-csv-scan').addEventListener('click', () => {
-      setStatus('Scanning visible content…');
+    // Buttons
+    const scanBtn = panel.querySelector('#fb-groups-scraper-scan');
+    scanBtn.onclick = () => {
       const added = scanPage();
-      updateUI();
-      setStatus(`✓ Scan complete. +${added} new, ${state.items.size} total.`);
-    });
+      setStatus(`Scan done: +${added} new groups (${state.items.size} total)`);
+    };
 
-    panel.querySelector('#fb-groups-csv-autoscan').addEventListener('click', function() {
+    const autoscanBtn = panel.querySelector('#fb-groups-scraper-autoscan');
+    autoscanBtn.onclick = () => {
       if (state.autoscanTimer) {
         clearInterval(state.autoscanTimer);
         state.autoscanTimer = null;
-        this.textContent = 'Auto-scan';
-        setStatus('Auto-scan stopped.');
+        state.isScanning = false;
+        autoscanBtn.textContent = '🤖 Auto-Scan (2min)';
+        setStatus('Auto-scan stopped');
         return;
       }
-
-      this.textContent = 'Stop';
-      state.autoscanEndAt = Date.now() + CONFIG.AUTO_SCAN_DURATION;
-      setStatus('Auto-scanning for ~30s…');
-
+      state.autoscanEndAt = Date.now() + 120000;
+      state.isScanning = true;
+      setStatus('🤖 Auto-scan started (2min)...');
+      autoscanBtn.textContent = '🛑 Stop Auto-Scan';
       state.autoscanTimer = setInterval(() => {
-        if (Date.now() > state.autoscanEndAt) {
+        window.scrollBy(0, window.innerHeight);
+        const added = scanPage();
+        if (added > 0) setStatus(`Auto-scan: +${added} (${state.items.size} total)`);
+        if (Date.now() > state.autoscanEndAt || state.items.size >= state.settings.maxItems) {
           clearInterval(state.autoscanTimer);
           state.autoscanTimer = null;
-          panel.querySelector('#fb-groups-csv-autoscan').textContent = 'Auto-scan';
-          setStatus(`✓ Auto-scan done. Total: ${state.items.size} groups.`);
-          storage.save();
-          return;
+          state.isScanning = false;
+          autoscanBtn.textContent = '🤖 Auto-Scan (2min)';
+          setStatus(`Auto-scan finished: ${state.items.size} groups`);
         }
-        window.scrollBy({ top: 600, behavior: 'auto' });
-        const added = scanPage();
-        if (added > 0) {
-          updateUI();
-          setStatus(`Scanning… +${added} new. Total: ${state.items.size}.`);
-        }
-      }, CONFIG.MUTATION_OBSERVER_THROTTLE);
-    });
+      }, 2000);
+    };
 
-    panel.querySelector('#fb-groups-csv-export').addEventListener('click', () => {
+    panel.querySelector('#fb-groups-scraper-export').onclick = () => {
+      const data = exportData(state.settings.exportFormat);
+      downloadData(data, state.settings.exportFormat);
+      setStatus(`Exported ${state.items.size} groups`);
+    };
+
+    panel.querySelector('#fb-groups-scraper-copy').onclick = async () => {
+      const data = exportData(state.settings.exportFormat);
       try {
-        const csv = toCSV();
-        downloadCSV(csv);
-        setStatus('✓ CSV downloaded.');
-      } catch (e) {
-        logger.error('Export failed', e);
-        setStatus(`✗ Export failed: ${e.message}`);
+        await navigator.clipboard.writeText(data);
+        setStatus('Copied to clipboard!');
+      } catch {
+        if (typeof GM_setClipboard === 'function') GM_setClipboard(data);
+        setStatus('Copied via GM!');
       }
-    });
+    };
 
-    panel.querySelector('#fb-groups-csv-copy').addEventListener('click', async function() {
-      try {
-        const csv = toCSV();
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          await navigator.clipboard.writeText(csv);
-        } else if (typeof GM_setClipboard === 'function') {
-          GM_setClipboard(csv);
-        } else {
-          throw new Error('Clipboard API not available');
+    panel.querySelector('#fb-groups-scraper-clear').onclick = () => {
+      if (confirm('Clear all collected groups?')) {
+        state.items.clear();
+        updateCount();
+        updateProgress();
+        updateList();
+        setStatus('Data cleared');
+      }
+    };
+
+    panel.querySelector('#fb-groups-scraper-theme').onclick = () => {
+      state.theme = state.theme === 'dark' ? 'light' : 'dark';
+      updateTheme();
+    };
+
+    panel.querySelector('#fb-groups-scraper-minimize').onclick = () => {
+      state.panelMinimized = !state.panelMinimized;
+      panel.classList.toggle('minimized', state.panelMinimized);
+    };
+
+    panel.querySelector('#fb-groups-scraper-close').onclick = () => panel.remove();
+
+    // Settings bindings
+    panel.querySelector('#fb-groups-scraper-format').onchange = (e) => {
+      state.settings.exportFormat = e.target.value;
+      saveSettings();
+    };
+
+    panel.querySelector('#fb-groups-scraper-minmembers').onchange = (e) => {
+      state.settings.minMembers = parseInt(e.target.value, 10) || 0;
+      saveSettings();
+    };
+
+    panel.querySelector('#fb-groups-scraper-activity').onchange = (e) => {
+      state.settings.activityThreshold = (e.target.value || '').trim();
+      saveSettings();
+    };
+
+    panel.querySelector('#fb-groups-scraper-showprogress').onchange = (e) => {
+      state.settings.showProgress = e.target.checked;
+      const pb = document.querySelector('.progress-bar');
+      if (pb) pb.classList.toggle('visible', e.target.checked);
+      saveSettings();
+    };
+
+    panel.querySelector('#fb-groups-scraper-showlist').onchange = (e) => {
+      state.settings.showList = e.target.checked;
+      const lc = document.querySelector('.list-container');
+      if (lc) lc.classList.toggle('visible', e.target.checked);
+      saveSettings();
+      updateList();
+    };
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
+      if (e.ctrlKey || e.metaKey) {
+        switch (e.key.toLowerCase()) {
+          case 's': e.preventDefault(); scanBtn.click(); break;
+          case 'a': e.preventDefault(); autoscanBtn.click(); break;
+          case 'e': e.preventDefault(); panel.querySelector('#fb-groups-scraper-export').click(); break;
         }
-        setStatus('✓ CSV copied to clipboard.');
-      } catch (e) {
-        logger.error('Copy failed', e);
-        setStatus(`✗ Copy failed: ${e.message}`);
       }
-    });
-
-    panel.querySelector('#fb-groups-csv-clear').addEventListener('click', function() {
-      if (confirm('Clear all ' + state.items.size + ' groups? This cannot be undone.')) {
-        storage.clear();
-        updateUI();
-        setStatus('✓ All data cleared.');
-      }
-    });
-
-    panel.querySelector('#fb-groups-csv-help').addEventListener('click', () => {
-      alert('Facebook Groups CSV Exporter v2.0\n\n' +
-        '• Scan: Extract visible groups\n' +
-        '• Auto-scan: Scroll & scan for 30s\n' +
-        '• Export: Download as CSV file\n' +
-        '• Copy: Copy CSV to clipboard\n' +
-        '• Clear: Delete all stored data\n\n' +
-        'Data persists between sessions.\n' +
-        'Drag panel to move.\n\n' +
-        'Tips: Use Auto-scan when viewing\n' +
-        'your groups list for best results.');
     });
   }
 
   function setStatus(msg) {
-    const el = document.querySelector('#fb-groups-csv-status');
-    if (el) {
-      el.textContent = msg;
-      el.style.animation = 'none';
-      setTimeout(() => el.style.animation = '', 10);
+    const el = document.getElementById('fb-groups-scraper-status');
+    if (el) el.textContent = msg;
+  }
+
+  function updateCount() {
+    const el = document.getElementById('fb-groups-scraper-count');
+    if (el) el.textContent = state.items.size.toLocaleString();
+  }
+
+  function updateProgress() {
+    const pct = Math.min(100, (state.items.size / state.settings.maxItems) * 100);
+    const fill = document.querySelector('.progress-bar .fill');
+    if (fill) fill.style.width = pct + '%';
+    if (state.items.size >= state.settings.maxItems) setStatus(`Max limit (${state.settings.maxItems}) reached!`);
+  }
+
+  function updateList() {
+    const listEl = document.getElementById('fb-groups-scraper-list');
+    const container = document.querySelector('.list-container');
+    if (!listEl || !container) return;
+
+    if (!state.settings.showList) {
+      listEl.innerHTML = '';
+      return;
+    }
+
+    listEl.innerHTML = '';
+    const sorted = Array.from(state.items.values()).sort((a, b) => b.membersNum - a.membersNum);
+
+    for (const rec of sorted) {
+      const item = document.createElement('div');
+      item.className = 'group-item';
+      item.innerHTML = `
+        <a href="${escapeHtml(rec.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(rec.name)}</a>
+        <span>${escapeHtml(rec.members || 'N/A')} members • ${escapeHtml(rec.lastActive || 'N/A')}</span>
+      `;
+      listEl.appendChild(item);
     }
   }
 
-  function updateUI() {
-    const count = state.items.size;
-    const countEl = document.querySelector('#fb-groups-csv-count');
-    if (countEl) countEl.textContent = count;
-
-    // Stats
-    const statTotal = document.querySelector('#fb-groups-csv-stat-total');
-    if (statTotal) statTotal.textContent = count;
-
-    const statAvg = document.querySelector('#fb-groups-csv-stat-avg');
-    if (statAvg) {
-      const members = Array.from(state.items.values())
-        .map(r => parseInt(r.members?.replace(/[^\d]/g, '') || '0'))
-        .filter(n => n > 0);
-      const avg = members.length > 0
-        ? Math.round(members.reduce((a, b) => a + b) / members.length).toLocaleString()
-        : '-';
-      statAvg.textContent = avg;
-    }
-
-    const statLastScan = document.querySelector('#fb-groups-csv-stat-lastscan');
-    if (statLastScan) {
-      const now = new Date();
-      const elapsed = Math.round((now - state.lastScanTime) / 1000);
-      statLastScan.textContent = elapsed < 60 ? `${elapsed}s ago` : `${Math.round(elapsed / 60)}m ago`;
-    }
-
-    storage.save();
+  function escapeHtml(s) {
+    return String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 
-  // --------- DEBOUNCED SCAN ---------
-  function scanPageDebounced() {
-    if (state.scanPending) return;
-    state.scanPending = true;
-    setTimeout(() => {
-      state.scanPending = false;
-      scanPage();
-      updateUI();
-    }, CONFIG.SCAN_DEBOUNCE_MS);
+  // --------- Time Parsing ---------
+  function parseTimeAgo(str) {
+    if (!str) return Infinity;
+    const m = str.match(/(\d+)\s*(second|minute|hour|day|week|month|year)s?\s*ago?/i);
+    if (!m) return Infinity;
+    const num = parseInt(m[1], 10);
+    const unit = m[2].toLowerCase();
+    switch (unit) {
+      case 'second': return num;
+      case 'minute': return num * 60;
+      case 'hour': return num * 3600;
+      case 'day': return num * 86400;
+      case 'week': return num * 604800;
+      case 'month': return num * 2592000;
+      case 'year': return num * 31536000;
+      default: return Infinity;
+    }
   }
 
-  // --------- CORE SCAN ---------
+  function isRecentEnough(lastActive, threshold) {
+    if (!threshold) return true;
+    const threshSeconds = parseTimeAgo((threshold || '').trim() + ' ago');
+    const activeSeconds = parseTimeAgo((lastActive || '').trim() + ' ago');
+    return activeSeconds <= threshSeconds;
+  }
+
+  // --------- Robust Scanning (2025 compatible) ---------
   function scanPage() {
-    const before = state.items.size;
-    const now = Date.now();
-
-    const anchors = Array.from(document.querySelectorAll(
-      'a[role="link"][href*="/groups/"], a[href*="/groups/"]'
-    ));
-
-    const badParts = [
-      '/groups/feed', '/groups/joins', '/groups/discover', '/groups/create',
-      '/groups/requests', '/groups/browse', '/groups/categories', '/groups/notifications',
-      '/groups/settings', '/groups/members', '/groups/events', '/groups/invitations'
+    let added = 0;
+    const linkSelectors = [
+      'a[href*="/groups/"]:not([href*="feed"]):not([href*="joins"]):not([href*="discover"]):not([href*="create"]):not([href*="requests"])',
+      'a[role="link"][href*="/groups/"]'
     ];
 
+    const anchors = new Set();
+    linkSelectors.forEach((sel) => {
+      document.querySelectorAll(sel).forEach((a) => anchors.add(a));
+    });
+
     for (const a of anchors) {
-      try {
-        const href = a.getAttribute('href');
-        if (!href) continue;
-        if (badParts.some(p => href.includes(p))) continue;
+      const href = a.getAttribute('href');
+      if (!href) continue;
 
-        const abs = absolutize(a.href);
-        const canonical = canonicalizeGroupUrl(abs);
-        if (!canonical) continue;
+      const abs = absolutize(href);
+      if (!abs) continue;
 
-        const key = groupKey(canonical);
-        if (state.items.has(key)) continue; // Skip already known
+      const canonical = canonicalizeGroupUrl(abs);
+      if (!canonical) continue;
 
-        const name = cleanText(a.textContent || '');
+      const key = groupKey(canonical);
+      if (state.items.has(key)) continue;
 
-        // Find context container
-        const container = a.closest(
-          '[role="article"], [data-pagelet], [class*="x1lliihq"], [class*="x1y1aw1k"], li, div[class*="Feed"]'
-        ) || a.parentElement;
+      const container =
+        a.closest('div[role="article"], div[data-pagelet], div.x1lliihq, div.x1y1aw1k, div.x78zum5, div.x1n2onr6') ||
+        a.closest('div') ||
+        a.parentElement;
+      if (!container) continue;
 
-        const textBlock = cleanText(container?.innerText || '');
-        const members = findMembers(textBlock);
-        const lastActive = findLastActive(textBlock);
-        const privacy = findPrivacy(textBlock, container);
+      const textBlock = container.innerText || '';
 
-        const altName = findAltName(container) || name;
-        const finalName = pickBestName(name, altName);
+      let name =
+        a.querySelector('span[dir="auto"]')?.innerText?.trim() ||
+        cleanText(a.innerText) ||
+        findBestName(container);
 
-        if (!finalName) continue;
+      if (!name || name.length < 3) continue;
 
-        const record = {
-          name: finalName,
-          members: members || '',
-          lastActive: lastActive || '',
-          privacy: privacy || '',
-          url: canonical,
-          timestamp: now,
-        };
+      const membersStr = findMembers(textBlock);
+      const membersNum = parseMembers(membersStr);
 
-        state.items.set(key, record);
-        logger.debug(`Found group: ${finalName}`);
-      } catch (e) {
-        logger.warn(`Error processing anchor`, e);
-        continue;
-      }
+      if (membersNum < state.settings.minMembers) continue;
+
+      const lastActive = findLastActive(textBlock);
+      if (!isRecentEnough(lastActive, state.settings.activityThreshold)) continue;
+
+      const record = {
+        name,
+        members: membersStr || '',
+        membersNum,
+        lastActive: lastActive || '',
+        url: canonical,
+        timestamp: new Date().toISOString()
+      };
+
+      state.items.set(key, record);
+      added++;
     }
 
-    state.lastScanTime = now;
-    const added = state.items.size - before;
-    if (added > 0) logger.info(`Scan found ${added} new groups`);
-
+    if (added > 0) {
+      updateCount();
+      updateProgress();
+      updateList();
+    }
     return added;
   }
 
-  // --------- HELPERS ---------
-  function absolutize(u) {
-    try {
-      return new URL(u, location.origin).toString();
-    } catch {
-      return null;
-    }
+  function parseMembers(str) {
+    if (!str) return 0;
+    const m = str.match(/([\d,.]+)([KkMm]?)/);
+    if (!m) return 0;
+    let num = parseFloat(m[1].replace(/,/g, ''));
+    const suffix = (m[2] || '').toLowerCase();
+    if (suffix === 'k') num *= 1000;
+    if (suffix === 'm') num *= 1000000;
+    return num;
   }
 
-  function canonicalizeGroupUrl(u) {
-    if (!u) return null;
-    try {
-      const url = new URL(u);
-      if (!/facebook\.com$/.test(url.hostname)) return null;
-      const path = url.pathname;
-      const idx = path.indexOf('/groups/');
-      if (idx === -1) return null;
-      const rest = path.slice(idx + 8);
-      const slug = rest.split('/')[0];
-      if (!slug) return null;
-      return `${url.origin}/groups/${slug}/`;
-    } catch {
-      return null;
-    }
-  }
-
-  function groupKey(canonicalUrl) {
-    const match = canonicalUrl.match(/\/groups\/([^/]+)\/?$/);
-    return match ? match[1] : null;
-  }
-
-  function cleanText(s) {
-    return (s || '')
-      .replace(/\s+/g, ' ')
-      .replace(/[\u200B-\u200D\uFEFF]/g, '') // Zero-width chars
-      .trim();
-  }
-
-  function findMembers(text) {
-    // "12.3K members", "3,241 members", "1M members"
-    const m = text.match(/([\d.,]+(?:\s*[KMB])?)\s+members/i);
-    return m ? m[1].trim() : '';
-  }
-
-  function findLastActive(text) {
-    // "Last active 2 hours ago", "Active 3 days ago"
-    const m = text.match(/(Last active[^.\n]*|Active \d+ .*? ago)/i);
-    return m ? cleanText(m[1]) : '';
-  }
-
-  function findPrivacy(text, container) {
-    let m = text.match(/\b(Public|Private)\s+group\b/i);
-    if (m) return m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase();
-
-    m = text.match(/\b(Public|Private)\b(?=[^\n]*members)/i);
-    if (m) return m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase();
-
-    if (container) {
-      const spans = container.querySelectorAll('span, div');
-      for (const el of spans) {
-        const t = cleanText(el.textContent || '');
-        if (/\bPublic group\b/i.test(t)) return 'Public';
-        if (/\bPrivate group\b/i.test(t)) return 'Private';
-      }
-    }
-
-    return '';
-  }
-
-  function findAltName(container) {
-    if (!container) return '';
-    const candidates = container.querySelectorAll('span, strong, h1, h2, h3, h4, div');
+  function findBestName(container) {
+    const candidates = container.querySelectorAll('span, div, strong, h3');
     let best = '';
     for (const el of candidates) {
-      const t = cleanText(el.textContent || '');
-      if (t.length > best.length && t.length <= 150 && !/members|active|join|create|see all|back|edit|settings/i.test(t)) {
+      const t = cleanText(el.innerText);
+      if (t.length > best.length && t.length < 150 && !/(members|posts|active|joined)/i.test(t)) {
         best = t;
       }
     }
     return best;
   }
 
-  function pickBestName(a, b) {
-    if (!a) return b;
-    if (!b) return a;
-    const score = s => {
-      let pts = 0;
-      if (s.length >= 3 && s.length <= 150) pts += 2;
-      if (/[A-Za-z]/.test(s)) pts += 1;
-      if (/members|active|join/i.test(s)) pts -= 2;
-      if (/^\d+$/.test(s)) pts -= 3;
-      return pts;
-    };
-    return score(b) > score(a) ? b : a;
+  // Helpers
+  function absolutize(u) {
+    try { return new URL(u, location.href).href; } catch { return null; }
   }
 
-  // --------- CSV EXPORT ---------
-  function toCSV() {
-    const rows = [['Group Name', 'Member Count', 'Last Active', 'Privacy', 'Group URL']];
+  function canonicalizeGroupUrl(u) {
+    try {
+      const url = new URL(u);
+      if (!url.hostname.endsWith('facebook.com')) return null;
+      const match = url.pathname.match(/\/groups\/([^/?]+)/);
+      return match ? `${url.origin}/groups/${match[1]}` : null;
+    } catch { return null; }
+  }
 
-    for (const rec of state.items.values()) {
-      rows.push([
-        rec.name,
-        rec.members,
-        rec.lastActive,
-        rec.privacy || '',
-        rec.url
-      ]);
+  function groupKey(url) {
+    return url.split('/groups/')[1];
+  }
+
+  function cleanText(s) {
+    return (s || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function findMembers(text) {
+    const regex = /([\d,.]+[KkMm]?)\s*members?/i;
+    const m = (text || '').match(regex);
+    return m ? m[1].trim() : null;
+  }
+
+  function findLastActive(text) {
+    const patterns = [
+      /active\s*([\d\w\s]+?)\s*ago/i,
+      /last\s*active\s*([\d\w\s]+?)\s*ago/i,
+      /([\d\w\s]+?)\s*(hour|day|week|month|year)s?\s*ago/i
+    ];
+    for (const pat of patterns) {
+      const m = (text || '').match(pat);
+      if (m) return cleanText(m[1] || m[0]);
+    }
+    return null;
+  }
+
+  // --------- Export ---------
+  function exportData(format) {
+    const sorted = Array.from(state.items.values()).sort((a, b) => b.membersNum - a.membersNum);
+
+    const rows = [['Group Name', 'Members', 'Last Active', 'URL', 'Scanned At']];
+    for (const rec of sorted) {
+      rows.push([rec.name, rec.members, rec.lastActive, rec.url, new Date(rec.timestamp).toLocaleString()]);
     }
 
-    const escapeCSV = v => {
-      const s = String(v ?? '').trim();
-      if (/[",\n\r]/.test(s)) {
-        return `"${s.replace(/"/g, '""')}"`;
-      }
-      return s;
-    };
+    if (format === 'csv') {
+      const esc = (v) => `"${String(v || '').replace(/"/g, '""')}"`;
+      return '\uFEFF' + rows.map((r) => r.map(esc).join(',')).join('\n');
+    }
 
-    const csvBody = rows.map(r => r.map(escapeCSV).join(',')).join('\n');
-    return '\uFEFF' + csvBody; // BOM for Excel UTF-8
+    return JSON.stringify(
+      { exportedAt: new Date().toISOString(), total: sorted.length, groups: sorted },
+      null,
+      2
+    );
   }
 
-  function downloadCSV(csv) {
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  function downloadData(data, format) {
+    const blob = new Blob([data], { type: format === 'csv' ? 'text/csv;charset=utf-8' : 'application/json' });
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    const ts = new Date().toISOString().replace(/[:.Z]/g, '').slice(0, -3);
-    a.href = URL.createObjectURL(blob);
-    a.download = `facebook-groups-${ts}.csv`;
-    document.body.appendChild(a);
+    a.href = url;
+    a.download = `fb-groups-${format}-${new Date().toISOString().slice(0, 10)}.${format}`;
     a.click();
-    setTimeout(() => {
-      URL.revokeObjectURL(a.href);
-      a.remove();
-    }, 100);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  // --------- MUTATION OBSERVER ---------
-  const obs = new MutationObserver(() => {
-    scanPageDebounced();
-  });
-
-  // --------- INITIALIZATION ---------
+  // --------- Init ---------
   function init() {
-    if (state.initialized) return;
-    if (document.getElementById('fb-groups-csv-panel')) return;
-
-    state.initialized = true;
+    if (document.getElementById('fb-groups-scraper-panel')) return;
+    loadSettings();
     createPanel();
-    storage.load();
-    updateUI();
-
-    // Initial scan
-    const initial = scanPage();
-    if (initial > 0) {
-      updateUI();
-      setStatus(`✓ Initialized. Found ${initial} groups.`);
-    } else {
-      setStatus('Ready. Click Scan to begin.');
+    setStatus('Initialized! Scan or Auto-Scan. Shortcuts: Ctrl+S/A/E');
+    if (state.settings.autoStart) {
+      document.querySelector('#fb-groups-scraper-autoscan')?.click();
     }
-
-    // Start observing mutations
-    obs.observe(document.documentElement, {
-      childList: true,
-      subtree: true,
-    });
-
-    logger.info('Initialization complete');
   }
 
-  // --------- BOOT ---------
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {
     init();
   }
-
-  // Cleanup on unload
-  window.addEventListener('beforeunload', () => {
-    if (state.autoscanTimer) {
-      clearInterval(state.autoscanTimer);
-    }
-    storage.save();
-  });
 })();
