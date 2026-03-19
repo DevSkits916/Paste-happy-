@@ -80,6 +80,78 @@ const SAMPLE_ROWS: Array<Pick<QueueRow, 'name' | 'url' | 'ad'>> = [
   },
 ];
 
+const PIPELINE_STEPS = [
+  'UserScript',
+  'CSV export',
+  'AI-assisted drafting',
+  'Paste Happy queue',
+  'Manual Facebook posting',
+] as const;
+
+interface TutorialSection {
+  title: string;
+  description: string;
+  items: string[];
+  note?: string;
+}
+
+const TUTORIAL_SECTIONS: TutorialSection[] = [
+  {
+    title: 'Part 1: Prepare your Facebook group CSV',
+    description:
+      'Start by exporting the group list you want to work through. Keep the original file untouched until you are ready to add content.',
+    items: [
+      'Install and enable your Facebook group scanner userscript in Tampermonkey.',
+      'Open the Facebook groups join/discovery page and scroll until the groups you want are visible.',
+      'Run the scan and export the CSV when you are finished loading groups.',
+      'Confirm the file includes group_name and group_url before moving on.',
+    ],
+  },
+  {
+    title: 'Part 2: Add one post per row',
+    description:
+      'Use your writing workflow to create a post column in the CSV so every row has the copy you want Paste Happy to manage.',
+    items: [
+      'Upload the exported CSV into your writing tool of choice.',
+      'Add a new post column without reordering the existing rows.',
+      'Review the final CSV carefully before downloading it back to your computer.',
+    ],
+    note: 'Paste Happy works best when each row already contains the final text you plan to post.',
+  },
+  {
+    title: 'Part 3: Load the finished CSV into Paste Happy',
+    description:
+      'Paste Happy treats every row as a single posting unit so you can move through the queue in order.',
+    items: [
+      'Open Paste Happy and import the completed CSV file.',
+      'Use the row list to review group names, URLs, and post text before posting.',
+      'Keep the queue sequential so your progress in the app matches your CSV.',
+    ],
+  },
+  {
+    title: 'Part 4: Post from the queue',
+    description:
+      'Work through the queue manually so you stay in control of what gets posted and when.',
+    items: [
+      'Select the current row in Paste Happy.',
+      'Use Copy & Open to copy the post text and open the group URL.',
+      'Paste into Facebook, confirm the content, and publish it yourself.',
+      'Return to Paste Happy and mark the row as Posted or Skip as needed.',
+    ],
+  },
+  {
+    title: 'Part 5: Good operating rules',
+    description:
+      'These habits keep the workflow easy to audit and easier to resume later.',
+    items: [
+      'Keep the CSV headers intact so imports remain predictable.',
+      'Move through rows in order instead of jumping around.',
+      'Use Export Remaining if you need to pause and come back later.',
+      'Reset the session only when you are ready to clear local progress.',
+    ],
+  },
+] as const;
+
 function InnerApp() {
   const { push } = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -438,15 +510,23 @@ function InnerApp() {
               <span className="rounded-2xl bg-sky-500/10 p-3 ring-1 ring-inset ring-sky-500/30">
                 <img src="/logo-fq.svg" alt="Paste Happy logo" className="h-12 w-12" />
               </span>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <p className="inline-flex items-center gap-2 rounded-full bg-slate-900/60 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-sky-100 ring-1 ring-sky-500/30">
                   <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                  Session ready
+                  Tutorial workspace
                 </p>
-                <h1 className="text-3xl font-semibold tracking-tight text-white">Paste Happy</h1>
-                <p className="max-w-xl text-sm text-slate-300">
-                  A calmer workspace for Facebook group runs—keep your queue organized, copy posts in one click, and stay in flow.
+                <h1 className="text-3xl font-semibold tracking-tight text-white">Facebook Group Posting Pipeline</h1>
+                <p className="max-w-2xl text-sm text-slate-300">
+                  Use this page as the working tutorial for preparing your CSV, loading it into Paste Happy, and moving through the queue one row at a time.
                 </p>
+                <div className="flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-sky-100/90">
+                  {PIPELINE_STEPS.map((step, index) => (
+                    <React.Fragment key={step}>
+                      <span className="rounded-full border border-sky-500/30 bg-sky-500/10 px-3 py-1">{step}</span>
+                      {index < PIPELINE_STEPS.length - 1 && <span className="self-center text-slate-500">→</span>}
+                    </React.Fragment>
+                  ))}
+                </div>
                 <div className="grid grid-cols-2 gap-3 text-sm sm:flex sm:flex-wrap">
                   <ActionPill label="Total" value={total} tone="neutral" />
                   <ActionPill label="Pending" value={counts.pending} tone="sky" />
@@ -489,22 +569,63 @@ function InnerApp() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-200">
-          <div className="flex items-start justify-between gap-3">
-            <div className="space-y-2">
-              <h2 className="text-base font-semibold text-white">What Paste Happy does</h2>
-              <p>
-                Paste Happy keeps a manual Facebook group posting queue in one place. Import a CSV of group names, URLs, and
-                post text, then move down the list with Copy &amp; Open to drop your message into each group.
-              </p>
-              <p>
-                Progress is stored locally while you mark rows as Posted, Skipped, or Failed. You can export remaining items at
-                any time to pick up where you left off.
+        <section className="grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
+          <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 shadow-lg shadow-slate-950/30">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-2">
+                <h2 className="text-xl font-semibold text-white">Tutorial</h2>
+                <p className="max-w-2xl text-sm text-slate-300">
+                  This replaces the old product blurb with a practical runbook for how Paste Happy fits into a Facebook group posting workflow.
+                </p>
+              </div>
+              <span className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-200 ring-1 ring-slate-700">
+                Top to bottom
+              </span>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              {TUTORIAL_SECTIONS.map((section) => (
+                <article key={section.title} className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+                  <h3 className="text-base font-semibold text-white">{section.title}</h3>
+                  <p className="mt-2 text-sm text-slate-300">{section.description}</p>
+                  <ol className="mt-3 space-y-2 text-sm text-slate-200">
+                    {section.items.map((item) => (
+                      <li key={item} className="flex gap-3">
+                        <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sky-500/15 text-[11px] font-bold text-sky-200 ring-1 ring-sky-500/30">
+                          •
+                        </span>
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ol>
+                  {section.note && (
+                    <p className="mt-3 rounded-2xl border border-sky-500/20 bg-sky-500/10 px-3 py-2 text-xs text-sky-100">
+                      {section.note}
+                    </p>
+                  )}
+                </article>
+              ))}
+            </div>
+          </div>
+
+          <aside className="space-y-4">
+            <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 shadow-lg shadow-slate-950/30">
+              <h2 className="text-lg font-semibold text-white">Entire flow</h2>
+              <p className="mt-2 text-sm text-slate-300">
+                Install userscript → Scan groups → Export CSV → Add the post column → Download CSV → Upload to Paste Happy → Copy post → Open group → Post → Mark progress.
               </p>
             </div>
-            <span className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-200 ring-1 ring-slate-700">Updated layout</span>
-          </div>
-        </div>
+            <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 shadow-lg shadow-slate-950/30">
+              <h2 className="text-lg font-semibold text-white">Paste Happy basics</h2>
+              <ul className="mt-3 space-y-2 text-sm text-slate-300">
+                <li>• Import a finished CSV when you are ready to work the queue.</li>
+                <li>• Copy &amp; Open brings the current post text and group URL together.</li>
+                <li>• Posted, Skipped, and search filters help you resume a session quickly.</li>
+                <li>• Export Remaining creates a handoff file if you pause mid-run.</li>
+              </ul>
+            </div>
+          </aside>
+        </section>
       </header>
 
       <section className="sticky top-0 z-20 -mx-4 border-y border-slate-800 bg-slate-950/90 px-4 py-3 backdrop-blur">
@@ -548,7 +669,7 @@ function InnerApp() {
       <main className="space-y-3">
         {filteredRows.length === 0 && (
           <p className="rounded-xl border border-dashed border-slate-700 bg-slate-900/60 p-6 text-sm text-slate-300">
-            Import a CSV to start managing your run.
+            Import a CSV with group names, URLs, and post text to start working through the queue.
           </p>
         )}
 
