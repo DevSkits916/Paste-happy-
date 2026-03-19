@@ -112,13 +112,14 @@ const TUTORIAL_SECTIONS: TutorialSection[] = [
   {
     title: 'Part 2: Add one post per row',
     description:
-      'Use your writing workflow to create a post column in the CSV so every row has the copy you want Paste Happy to manage.',
+      'Use ChatGPT to turn the exported CSV into a completed file with a unique advertisement for each Facebook group before you import it into Paste Happy.',
     items: [
-      'Upload the exported CSV into your writing tool of choice.',
-      'Add a new post column without reordering the existing rows.',
-      'Review the final CSV carefully before downloading it back to your computer.',
+      'Upload the exported CSV directly into ChatGPT.',
+      'Tell ChatGPT to add or fill a post column with one unique advertisement for each Facebook group listed in the CSV.',
+      'Ask ChatGPT to keep the existing rows in the same order and return the finished CSV with every row completed.',
+      'Download the completed CSV ChatGPT generates, then review the post text before importing it into Paste Happy.',
     ],
-    note: 'Paste Happy works best when each row already contains the final text you plan to post.',
+    note: 'Paste Happy works best when the downloaded CSV already includes one finished advertisement in the post column for every row.',
   },
   {
     title: 'Part 3: Load the finished CSV into Paste Happy',
