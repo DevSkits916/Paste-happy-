@@ -4,6 +4,7 @@ import { copyText } from './lib/clipboard';
 import { ParsedCsvRow, parseCsvRows } from './lib/csv';
 import { createId } from './lib/id';
 import { loadState, saveState } from './lib/storage';
+import { SAMPLE_CSV, SAMPLE_CSV_ROW_COUNT } from './lib/sampleCsv';
 import { RowHistoryEntry, RowStatusKind } from './lib/types';
 
 interface QueueRow {
@@ -26,59 +27,6 @@ interface AppState {
 
 const STORAGE_KEY = 'paste-happy-session-v3';
 const UNDO_DURATION_MS = 16000;
-
-const SAMPLE_ROWS: Array<Pick<QueueRow, 'name' | 'url' | 'ad'>> = [
-  {
-    name: 'Remote Work Allies',
-    url: 'https://www.facebook.com/groups/remoteworkallies',
-    ad: 'Hi everyone! We are sharing a toolkit for finding flexible roles this month.',
-  },
-  {
-    name: 'Makers & Builders Hub',
-    url: 'https://www.facebook.com/groups/makersbuilders',
-    ad: 'Weekly build thread is live—drop your latest demo and feedback requests here!',
-  },
-  {
-    name: 'Growth Experiments Lab',
-    url: 'https://www.facebook.com/groups/growthexperiments',
-    ad: 'We are opening a beta list for our outreach automation—DMs welcome for invites.',
-  },
-  {
-    name: 'SaaS Launchpad',
-    url: 'https://www.facebook.com/groups/saaslaunchpad',
-    ad: 'Launching a new scheduling feature this week. Would love early testers!',
-  },
-  {
-    name: 'Community Builders Collective',
-    url: 'https://www.facebook.com/groups/communitybuilderscollective',
-    ad: 'Looking for moderators to trial our onboarding templates—details inside.',
-  },
-  {
-    name: 'Design Feedback Circle',
-    url: 'https://www.facebook.com/groups/designfeedbackcircle',
-    ad: 'Sharing updated UI mockups for comments. Honest critique appreciated!',
-  },
-  {
-    name: 'No-Code Ninjas',
-    url: 'https://www.facebook.com/groups/nocodeninjas',
-    ad: 'New tutorial on automating lead capture with Airtable and Zapier—grab the guide.',
-  },
-  {
-    name: 'Agency Growth Guild',
-    url: 'https://www.facebook.com/groups/agencygrowthguild',
-    ad: 'Offering 3 case study reviews this week—comment if you want a slot.',
-  },
-  {
-    name: 'AI Tools Daily',
-    url: 'https://www.facebook.com/groups/aitoolsdaily',
-    ad: 'Sharing prompts that helped us halve response times. Copy/paste friendly!',
-  },
-  {
-    name: 'Founders Helping Founders',
-    url: 'https://www.facebook.com/groups/foundershelpingfounders',
-    ad: 'If you are hiring part-time SDRs, we compiled a shortlist—DM for the doc.',
-  },
-];
 
 const PIPELINE_STEPS = [
   'UserScript',
@@ -403,18 +351,14 @@ function InnerApp() {
   );
 
   const handleDownloadSample = useCallback(() => {
-    const header = ['Group Name', 'Group URL', 'Post Text'];
-    const csv = [header, ...SAMPLE_ROWS.map((row) => [row.name, row.url, row.ad].map(escapeCsvValue))]
-      .map((columns) => columns.join(','))
-      .join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
+    const blob = new Blob([SAMPLE_CSV], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
     anchor.download = 'paste-happy-sample.csv';
     anchor.click();
     URL.revokeObjectURL(url);
-    push('Downloaded sample CSV with 10 example groups.', 'success');
+    push(`Downloaded sample CSV with ${SAMPLE_CSV_ROW_COUNT} example groups.`, 'success');
   }, [push]);
 
   const handlePostEdit = useCallback((id: string, ad: string) => {
