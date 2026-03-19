@@ -467,25 +467,37 @@ function InnerApp() {
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-6 px-4 pb-10 pt-6 text-slate-100">
-      {currentRow && (
-        <section className="-mx-4 border-b border-slate-800 bg-slate-950/95 px-4 py-3 shadow-lg shadow-slate-950/40">
-          <div className="mx-auto flex max-w-5xl flex-nowrap items-center justify-start gap-2 overflow-x-auto">
-            <ActionButton
-              label="Copy & Open"
-              tone="primary"
-              size="lg"
-              onClick={() => handleCopyAndOpen(currentRow)}
-            />
-            <ActionButton
-              label="Mark Posted"
-              tone="success"
-              size="lg"
-              onClick={() => handlePosted(currentRow)}
-            />
-            <ActionButton label="Skip" tone="muted" size="lg" onClick={() => handleSkip(currentRow)} />
-          </div>
-        </section>
-      )}
+      <section className="-mx-4 border-b border-slate-800 bg-slate-950/95 px-4 py-3 shadow-lg shadow-slate-950/40">
+        <div className="mx-auto flex max-w-5xl flex-nowrap items-center justify-start gap-2 overflow-x-auto">
+          <ActionButton
+            label="Copy & Open"
+            tone="primary"
+            size="lg"
+            disabled={!currentRow}
+            onClick={() => {
+              if (currentRow) handleCopyAndOpen(currentRow);
+            }}
+          />
+          <ActionButton
+            label="Mark Posted"
+            tone="success"
+            size="lg"
+            disabled={!currentRow}
+            onClick={() => {
+              if (currentRow) handlePosted(currentRow);
+            }}
+          />
+          <ActionButton
+            label="Skip"
+            tone="muted"
+            size="lg"
+            disabled={!currentRow}
+            onClick={() => {
+              if (currentRow) handleSkip(currentRow);
+            }}
+          />
+        </div>
+      </section>
       <header className="space-y-4">
         <div className="overflow-hidden rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-950/70 to-sky-950 shadow-xl shadow-sky-900/40">
           <div className="flex flex-col gap-6 p-6 lg:flex-row lg:items-center lg:justify-between">
@@ -559,7 +571,7 @@ function InnerApp() {
           </div>
         </div>
 
-        <section className="grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
+        <section>
           <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 shadow-lg shadow-slate-950/30">
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-2">
@@ -597,24 +609,6 @@ function InnerApp() {
               ))}
             </div>
           </div>
-
-          <aside className="space-y-4">
-            <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 shadow-lg shadow-slate-950/30">
-              <h2 className="text-lg font-semibold text-white">Entire flow</h2>
-              <p className="mt-2 text-sm text-slate-300">
-                Download userscript → Install in Tampermonkey → Scan groups → Export CSV → Add the post column → Download CSV → Upload to Paste Happy → Copy &amp; Open the matching row → Paste and publish in Facebook → Mark Posted and continue.
-              </p>
-            </div>
-            <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 shadow-lg shadow-slate-950/30">
-              <h2 className="text-lg font-semibold text-white">Paste Happy basics</h2>
-              <ul className="mt-3 space-y-2 text-sm text-slate-300">
-                <li>• Import a finished CSV when you are ready to work the queue.</li>
-                <li>• Copy &amp; Open copies the post column to your clipboard and opens the Facebook group URL from that same CSV row.</li>
-                <li>• Posted, Skipped, and search filters help you resume a session quickly.</li>
-                <li>• Export Remaining creates a handoff file if you pause mid-run.</li>
-              </ul>
-            </div>
-          </aside>
         </section>
       </header>
 
@@ -1033,11 +1027,13 @@ function ActionButton({
   tone,
   onClick,
   size = 'md',
+  disabled = false,
 }: {
   label: string;
   tone: 'primary' | 'success' | 'muted' | 'danger';
   onClick: () => void;
   size?: 'md' | 'lg';
+  disabled?: boolean;
 }) {
   const styles: Record<'primary' | 'success' | 'muted' | 'danger', string> = {
     primary: 'border-sky-500/60 bg-sky-500/15 text-sky-100',
@@ -1054,7 +1050,8 @@ function ActionButton({
     <button
       type="button"
       onClick={onClick}
-      className={`w-full rounded-full border font-semibold uppercase tracking-wide shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400 sm:w-auto ${sizeStyles[size]} ${styles[tone]}`}
+      disabled={disabled}
+      className={`w-full rounded-full border font-semibold uppercase tracking-wide shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400 disabled:cursor-not-allowed disabled:border-slate-800 disabled:bg-slate-900/70 disabled:text-slate-500 disabled:shadow-none sm:w-auto ${sizeStyles[size]} ${styles[tone]}`}
     >
       {label}
     </button>
