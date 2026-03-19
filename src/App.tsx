@@ -424,9 +424,14 @@ function InnerApp() {
               <button
                 type="button"
                 onClick={handleFilePicker}
-                className="inline-flex h-14 items-center justify-center rounded-full border border-sky-300 bg-sky-400 px-6 text-base font-bold uppercase tracking-[0.2em] text-slate-950 shadow-lg shadow-sky-500/30 transition hover:bg-sky-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-200"
+                className="inline-flex h-14 items-center justify-center gap-3 rounded-full border border-sky-300 bg-sky-400 px-6 text-base font-bold uppercase tracking-[0.2em] text-slate-950 shadow-lg shadow-sky-500/30 transition hover:bg-sky-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-200"
               >
-                Import CSV
+                <span aria-hidden="true" className="flex h-6 w-6 items-center justify-center">
+                  <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current">
+                    <path d="M3.75 6A2.25 2.25 0 0 1 6 3.75h3.39c.597 0 1.17.237 1.591.659l1.11 1.11c.14.14.33.22.53.22H18A2.25 2.25 0 0 1 20.25 8v1.136a2.75 2.75 0 0 0-1.585-.386H5.335A2.75 2.75 0 0 0 2.75 10.56V6Zm-.914 5.033A1.25 1.25 0 0 1 4.04 10.25h14.625a1.25 1.25 0 0 1 1.205 1.581l-1.595 5.467a1.25 1.25 0 0 1-1.2.9H5.629a1.25 1.25 0 0 1-1.204-.916l-1.59-5.467a1.25 1.25 0 0 1 .001-.782Z" />
+                  </svg>
+                </span>
+                <span>Import CSV</span>
               </button>
               <button
                 type="button"
