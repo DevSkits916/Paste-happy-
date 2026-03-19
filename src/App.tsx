@@ -28,14 +28,6 @@ interface AppState {
 const STORAGE_KEY = 'paste-happy-session-v3';
 const UNDO_DURATION_MS = 16000;
 
-const PIPELINE_STEPS = [
-  'UserScript',
-  'CSV export',
-  'AI-assisted drafting',
-  'Paste Happy queue',
-  'Manual Facebook posting',
-] as const;
-
 const FACEBOOK_GROUPS_SCANNER_SCRIPT_PATH = '/userscripts/facebook-groups-discover-export.user.js';
 
 interface TutorialSection {
@@ -418,18 +410,7 @@ function InnerApp() {
                   <span className="h-2 w-2 rounded-full bg-emerald-400" />
                   Tutorial workspace
                 </p>
-                <h1 className="text-3xl font-semibold tracking-tight text-white">Facebook Group Posting Pipeline</h1>
-                <p className="max-w-2xl text-sm text-slate-300">
-                  Use this page as the working tutorial for preparing your CSV, loading it into Paste Happy, and moving through the queue one row at a time.
-                </p>
-                <div className="flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-sky-100/90">
-                  {PIPELINE_STEPS.map((step, index) => (
-                    <React.Fragment key={step}>
-                      <span className="rounded-full border border-sky-500/30 bg-sky-500/10 px-3 py-1">{step}</span>
-                      {index < PIPELINE_STEPS.length - 1 && <span className="self-center text-slate-500">→</span>}
-                    </React.Fragment>
-                  ))}
-                </div>
+                <h1 className="text-3xl font-semibold tracking-tight text-white">PasteHappy</h1>
                 <div className="grid grid-cols-2 gap-3 text-sm sm:flex sm:flex-wrap">
                   <ActionPill label="Total" value={total} tone="neutral" />
                   <ActionPill label="Pending" value={counts.pending} tone="sky" />
