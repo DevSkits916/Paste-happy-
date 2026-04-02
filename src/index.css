@@ -18,3 +18,7 @@ body {
 a {
   @apply text-sky-400 underline-offset-2 hover:text-sky-300;
 }
+
+.top-action-bar {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 0.75rem);
+}
