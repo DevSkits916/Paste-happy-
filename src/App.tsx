@@ -43,7 +43,7 @@ const TUTORIAL_SECTIONS: TutorialSection[] = [
     description:
       'Start by exporting the group list you want to work through. Keep the original file untouched until you are ready to add content.',
     items: [
-      'Download userscript above and use with Tampermokey/userscript browser extension',
+      'Install Tampermonkey from https://www.tampermonkey.net and use it (or another userscript browser extension) to run the script.',
       'Open the Facebook groups join/discovery page and scroll until the groups you want are visible.',
       'Run the scan and export the CSV when you are finished loading groups.',
       'Confirm the file includes group_name and group_url before moving on.',
