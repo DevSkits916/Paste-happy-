@@ -367,7 +367,7 @@ function InnerApp() {
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-6 px-4 pb-10 pt-24 text-slate-100">
-      <section className="fixed inset-x-0 top-0 z-50 border-b border-slate-800 bg-slate-950/95 px-4 py-3 shadow-lg shadow-slate-950/40 backdrop-blur">
+      <section className="top-action-bar fixed inset-x-0 top-0 z-50 border-b border-slate-800 bg-slate-950/95 px-4 py-3 shadow-lg shadow-slate-950/40 backdrop-blur">
         <div className="mx-auto flex max-w-5xl flex-nowrap items-center justify-start gap-2 overflow-x-auto">
           <ActionButton
             label="Copy & Open"
