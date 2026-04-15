@@ -27,7 +27,6 @@
     autoscanUntil: 0,
     observerDebounce: null,
     saveDebounce: null,
-    lastScanAt: 0,
     prefs: {
       right: 16,
       bottom: 16,
@@ -444,14 +443,12 @@
 
     scanBtn.addEventListener('click', () => {
       const added = scanPage({ allowObserverStatus: false });
-      state.lastScanAt = Date.now();
       setStatus(added ? `Scan complete. Added ${added} new group${added === 1 ? '' : 's'}.` : 'Scan complete. No new groups found on the visible page.');
       refreshUI({ added, mode: 'Manual' });
     });
 
     rescanBtn.addEventListener('click', () => {
       const added = scanPage({ forceRefresh: true, allowObserverStatus: false });
-      state.lastScanAt = Date.now();
       setStatus(added ? `Page rescanned. Refreshed data and picked up ${added} additional group${added === 1 ? '' : 's'}.` : 'Page rescanned. Existing records refreshed; nothing new found.');
       refreshUI({ added, mode: 'Refresh' });
     });
@@ -812,11 +809,7 @@
       };
 
       const previous = state.items.get(key);
-      if (forceRefresh || !previous) {
-        state.items.set(key, mergeRecord(previous, record));
-      } else {
-        state.items.set(key, mergeRecord(previous, record));
-      }
+      state.items.set(key, mergeRecord(previous, record));
 
       touched += 1;
       state.recentKeys = [key, ...state.recentKeys.filter((existing) => existing !== key)].slice(0, 80);
