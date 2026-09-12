@@ -14,3 +14,19 @@ test('an error after submit can remain uncertain without retry', async () => {
   const worker = new QueueWorker({ store, browser: { page: async () => ({}) }, poster: async () => { throw Object.assign(new Error('POST_UNCERTAIN: verify'), { code: 'POST_UNCERTAIN' }); }, defaults: { defaultJobDelay: 0, maxJobsPerRun: 2 } });
   worker.start({ delayMs: 0 }); await worker.runPromise; assert.equal(store.jobs[0].status, 'uncertain'); assert.equal(store.jobs[0].attempts, 1);
 });
+
+test('skipping the current job closes its browser work and continues immediately', async () => {
+  const store = fakeStore([{ id: '1', status: 'pending', attempts: 0 }, { id: '2', status: 'pending', attempts: 0 }]);
+  let releaseFirst; let firstStarted;
+  const firstStartedPromise = new Promise((resolve) => { firstStarted = resolve; });
+  let browserClosed = 0;
+  const worker = new QueueWorker({
+    store,
+    browser: { page: async () => ({}), close: async () => { browserClosed += 1; } },
+    poster: async (_page, job) => { if (job.id === '1') { firstStarted(); await new Promise((resolve) => { releaseFirst = resolve; }); } },
+    defaults: { defaultJobDelay: 0, maxJobsPerRun: 2 },
+  });
+  worker.start({ delayMs: 0 }); await firstStartedPromise;
+  await worker.skipCurrent(); releaseFirst(); await worker.runPromise;
+  assert.deepEqual(store.jobs.map((job) => job.status), ['skipped', 'posted']); assert.equal(browserClosed, 1);
+});

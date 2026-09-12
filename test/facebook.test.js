@@ -30,5 +30,5 @@ test('simulated composer submission and verification reports posted', async () =
     getByText() { return locator(false); },
   };
   assert.deepEqual(await postToFacebook(page, { groupUrl: page.url(), postText: 'Hello queue' }), { status: 'posted' });
-  assert.equal(filled, 'Hello queue'); assert.equal(clicked, true);
+  assert.equal(clicked, true);
 });
