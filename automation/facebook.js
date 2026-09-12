@@ -1,5 +1,5 @@
 import { copyToSystemClipboard } from './clipboard.js';
-import { firstVisible, selectors } from './selectors.js';
+import { firstEnabled, firstVisible, selectors } from './selectors.js';
 
 export class AutomationError extends Error { constructor(code, message, options = {}) { super(`${code}: ${message}`); this.code = code; this.security = options.security; } }
 
@@ -15,12 +15,12 @@ async function copyPostText(page, text) {
 }
 
 async function pastePostText(page, editor, text) {
-  await editor.click();
+  await editor.focus();
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+V' : 'Control+V');
   await page.waitForTimeout(150);
   if ((await editor.innerText().catch(() => '')).includes(text)) return true;
   if (!(await copyPostText(page, text))) return false;
-  await editor.click();
+  await editor.focus();
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+V' : 'Control+V');
   await page.waitForTimeout(150);
   return (await editor.innerText().catch(() => '')).includes(text);
@@ -41,17 +41,19 @@ export async function postToFacebook(page, job, onStep = () => {}) {
     const trigger = await firstVisible(selectors.composerTriggers, page); if (!trigger) throw new AutomationError('COMPOSER_NOT_FOUND', 'Could not locate the group composer.');
     await trigger.click();
     const editor = await firstVisible(selectors.editors, page); if (!editor) throw new AutomationError('COMPOSER_NOT_FOUND', 'Composer opened but its text field was not found.');
-    onStep('Copying and pasting post text...');
+    onStep('Focusing composer and pasting post text...');
     if (!(await pastePostText(page, editor, job.postText))) {
       onStep('Entering post text...');
       await editor.fill(job.postText);
     }
-    const button = await firstVisible(selectors.postButtons, page); if (!button) throw new AutomationError('POST_BUTTON_NOT_FOUND', 'Post button was not found.');
+    const button = await firstEnabled(selectors.postButtons, page); if (!button) throw new AutomationError('POST_BUTTON_NOT_FOUND', 'Post button was not enabled after entering the text.');
     onStep('Submitting post...'); await button.click(); submitted = true;
     onStep('Verifying post...');
-    await page.waitForTimeout(2500);
-    const dialogClosed = !(await editor.isVisible().catch(() => false));
-    const textVisible = await page.getByText(job.postText.slice(0, 80), { exact: false }).first().isVisible().catch(() => false);
+    const [dialogVisible, textVisible] = await Promise.all([
+      editor.isVisible().catch(() => false),
+      page.getByText(job.postText.slice(0, 80), { exact: false }).first().isVisible().catch(() => false),
+    ]);
+    const dialogClosed = !dialogVisible;
     if (!dialogClosed && !textVisible) throw new AutomationError('POST_UNCERTAIN', 'Submission was clicked but confirmation could not be verified.');
     return { status: 'posted' };
   } catch (error) {
