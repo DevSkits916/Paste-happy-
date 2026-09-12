@@ -45,6 +45,7 @@ export class QueueStore {
     return this.transition(id, 'pending', { lastError: null, postedAt: null });
   }
   async skip(id) { return this.transition(id, 'skipped'); }
+  async clear() { const cleared = this.state.jobs.length; this.state.jobs = []; await this.persist(); return { cleared }; }
   async persist() {
     const snapshot = JSON.stringify(this.state, null, 2); const target = this.filePath;
     this.writeChain = this.writeChain.then(async () => { await mkdir(path.dirname(target), { recursive: true }); const temp = `${target}.tmp`; await writeFile(temp, snapshot); await rename(temp, target); });

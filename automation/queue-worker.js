@@ -13,6 +13,11 @@ export class QueueWorker {
   pause() { if (this.runPromise) this.mode = 'paused'; }
   resume() { if (this.runPromise && this.mode === 'paused') this.mode = 'running'; }
   stop() { this.mode = 'stopped'; }
+  async clearQueue() {
+    this.mode = 'stopped'; this.currentJob = null; this.currentStep = 'Queue cleared'; this.skipRequested.clear();
+    await this.browser.close?.();
+    return this.store.clear();
+  }
   async skipCurrent() {
     if (!this.runPromise || !this.currentJob) return null;
     const jobId = this.currentJob.id;
@@ -30,7 +35,7 @@ export class QueueWorker {
       let skipped = false;
       try {
         this.currentStep = 'Copying post text to clipboard...';
-        if (!(await copyToSystemClipboard(job.postText))) console.warn(`[QUEUE] ${job.id} could not copy text to the system clipboard; the browser fallback will be used.`);
+        if (!(await copyToSystemClipboard(job.postText))) console.warn(`[QUEUE] ${job.id} could not copy text to the system clipboard; the composer will still be filled directly.`);
         const page = await this.browser.page();
         await this.poster(page, job, (step) => { this.currentStep = step; console.log(`[FACEBOOK] ${step}`); });
         if (this.skipRequested.delete(job.id)) { skipped = true; console.log(`[QUEUE] Job ${job.id} skipped`); }

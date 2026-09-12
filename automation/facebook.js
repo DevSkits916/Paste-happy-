@@ -1,29 +1,17 @@
-import { copyToSystemClipboard } from './clipboard.js';
 import { firstEnabled, firstVisible, selectors } from './selectors.js';
 
 export class AutomationError extends Error { constructor(code, message, options = {}) { super(`${code}: ${message}`); this.code = code; this.security = options.security; } }
 
-async function copyPostText(page, text) {
-  if (await copyToSystemClipboard(text)) return true;
-  try {
-    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new URL(page.url()).origin });
-    await page.evaluate((value) => navigator.clipboard.writeText(value), text);
-    return true;
-  } catch {
-    return false;
-  }
-}
+const normalizedText = (text) => text.replace(/\s+/gu, ' ').trim();
 
-async function pastePostText(page, editor, text) {
-  await editor.focus();
-  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+V' : 'Control+V');
-  await page.waitForTimeout(150);
-  if ((await editor.innerText().catch(() => '')).includes(text)) return true;
-  if (!(await copyPostText(page, text))) return false;
-  await editor.focus();
-  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+V' : 'Control+V');
-  await page.waitForTimeout(150);
-  return (await editor.innerText().catch(() => '')).includes(text);
+export async function enterPostText(page, editor, text) {
+  // Replacing the contents is idempotent, unlike retrying a clipboard paste.
+  await editor.fill(text, { timeout: 10000 });
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    if (normalizedText(await editor.innerText({ timeout: 1000 })) === normalizedText(text)) return;
+    await page.waitForTimeout(250);
+  }
+  throw new AutomationError('POST_TEXT_MISMATCH', 'The composer text did not match the queued post. Submission was stopped.');
 }
 
 export async function postToFacebook(page, job, onStep = () => {}) {
@@ -41,12 +29,10 @@ export async function postToFacebook(page, job, onStep = () => {}) {
     const trigger = await firstVisible(selectors.composerTriggers, page); if (!trigger) throw new AutomationError('COMPOSER_NOT_FOUND', 'Could not locate the group composer.');
     await trigger.click();
     const editor = await firstVisible(selectors.editors, page); if (!editor) throw new AutomationError('COMPOSER_NOT_FOUND', 'Composer opened but its text field was not found.');
-    onStep('Focusing composer and pasting post text...');
-    if (!(await pastePostText(page, editor, job.postText))) {
-      onStep('Entering post text...');
-      await editor.fill(job.postText);
-    }
-    const button = await firstEnabled(selectors.postButtons, page); if (!button) throw new AutomationError('POST_BUTTON_NOT_FOUND', 'Post button was not enabled after entering the text.');
+    onStep('Entering post text...');
+    await enterPostText(page, editor, job.postText);
+    const dialog = editor.locator('xpath=ancestor::*[@role="dialog"][1]');
+    const button = await firstEnabled(selectors.postButtons, dialog); if (!button) throw new AutomationError('POST_BUTTON_NOT_FOUND', 'Post button was not enabled after entering the text.');
     onStep('Submitting post...'); await button.click(); submitted = true;
     onStep('Verifying post...');
     const [dialogVisible, textVisible] = await Promise.all([
