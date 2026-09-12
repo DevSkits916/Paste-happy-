@@ -4,3 +4,8 @@ node_modules
 dist
 tsconfig.tsbuildinfo
 .vscode
+data/
+.browser-profile/
+playwright-report/
+test-results/
+.env
