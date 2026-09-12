@@ -1,3 +1,5 @@
+import { copyToSystemClipboard } from './clipboard.js';
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export class QueueWorker {
@@ -18,6 +20,8 @@ export class QueueWorker {
       const job = await this.store.claimNext(); if (!job) break;
       this.currentJob = job; this.currentStep = 'Starting job...'; console.log(`[QUEUE] Starting job ${job.id}`);
       try {
+        this.currentStep = 'Copying post text to clipboard...';
+        if (!(await copyToSystemClipboard(job.postText))) console.warn(`[QUEUE] ${job.id} could not copy text to the system clipboard; the browser fallback will be used.`);
         const page = await this.browser.page();
         await this.poster(page, job, (step) => { this.currentStep = step; console.log(`[FACEBOOK] ${step}`); });
         await this.store.transition(job.id, 'posted'); console.log(`[QUEUE] Job ${job.id} marked posted`);
