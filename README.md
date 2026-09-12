@@ -90,6 +90,7 @@ Copy `.env.example` values into your shell or system environment before starting
 | `QUEUE_DATA_PATH` | `data/queue.json` | Persistent queue file |
 | `BROWSER_PROFILE_PATH` | `.browser-profile` | Private Chromium profile |
 | `PLAYWRIGHT_HEADLESS` | `false` | Use a visible browser; recommended for Facebook |
+| `PLAYWRIGHT_EXECUTABLE_PATH` | unset | Optional path to a Chromium/Chrome executable; Windows automatically falls back to installed Google Chrome if Playwright's bundled browser is unavailable |
 | `DEFAULT_JOB_DELAY` | `15000` | Milliseconds between jobs |
 | `MAX_JOBS_PER_RUN` | `10` | Conservative run cap |
 

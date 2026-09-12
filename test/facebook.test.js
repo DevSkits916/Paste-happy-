@@ -14,10 +14,13 @@ test('login-required state becomes a structured security error without submittin
 });
 
 test('simulated composer submission and verification reports posted', async () => {
-  let filled = ''; let clicked = false;
-  const editor = { ...locator(true), async fill(value) { filled = value; }, async isVisible() { return !clicked; } };
+  let filled = ''; let clicked = false; let clipboard = ''; let pasted = '';
+  const editor = { ...locator(true), async fill(value) { filled = value; }, async innerText() { return pasted; }, async isVisible() { return !clicked; } };
   const page = {
     async goto() {}, async waitForTimeout() {}, url: () => 'https://www.facebook.com/groups/1',
+    context() { return { async grantPermissions() {} }; },
+    async evaluate(_write, value) { clipboard = value; },
+    keyboard: { async press(key) { if (key === 'Control+V') pasted = clipboard; } },
     locator(selector) { if (selector === 'body') return locator(true, 'Group feed'); if (selector.includes('contenteditable')) return editor; return locator(false); },
     getByRole(role, options = {}) {
       if (role === 'dialog') return { locator: () => editor, getByRole: () => ({ ...locator(true), async click() { clicked = true; } }) };

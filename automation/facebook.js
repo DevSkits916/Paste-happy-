@@ -1,6 +1,35 @@
+import { spawn } from 'node:child_process';
 import { firstVisible, selectors } from './selectors.js';
 
 export class AutomationError extends Error { constructor(code, message, options = {}) { super(`${code}: ${message}`); this.code = code; this.security = options.security; } }
+
+async function copyToWindowsClipboard(text) {
+  return new Promise((resolve) => {
+    const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Set-Clipboard -Value ([Console]::In.ReadToEnd())'], { stdio: ['pipe', 'ignore', 'ignore'], windowsHide: true });
+    child.once('error', () => resolve(false));
+    child.once('close', (code) => resolve(code === 0));
+    child.stdin.end(text, 'utf8');
+  });
+}
+
+async function copyPostText(page, text) {
+  if (process.platform === 'win32' && await copyToWindowsClipboard(text)) return true;
+  try {
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new URL(page.url()).origin });
+    await page.evaluate((value) => navigator.clipboard.writeText(value), text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function pastePostText(page, editor, text) {
+  if (!(await copyPostText(page, text))) return false;
+  await editor.click();
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+V' : 'Control+V');
+  await page.waitForTimeout(150);
+  return (await editor.innerText().catch(() => '')).includes(text);
+}
 
 export async function postToFacebook(page, job, onStep = () => {}) {
   let submitted = false;
@@ -17,7 +46,11 @@ export async function postToFacebook(page, job, onStep = () => {}) {
     const trigger = await firstVisible(selectors.composerTriggers, page); if (!trigger) throw new AutomationError('COMPOSER_NOT_FOUND', 'Could not locate the group composer.');
     await trigger.click();
     const editor = await firstVisible(selectors.editors, page); if (!editor) throw new AutomationError('COMPOSER_NOT_FOUND', 'Composer opened but its text field was not found.');
-    onStep('Entering post text...'); await editor.fill(job.postText);
+    onStep('Copying and pasting post text...');
+    if (!(await pastePostText(page, editor, job.postText))) {
+      onStep('Entering post text...');
+      await editor.fill(job.postText);
+    }
     const button = await firstVisible(selectors.postButtons, page); if (!button) throw new AutomationError('POST_BUTTON_NOT_FOUND', 'Post button was not found.');
     onStep('Submitting post...'); await button.click(); submitted = true;
     onStep('Verifying post...');
