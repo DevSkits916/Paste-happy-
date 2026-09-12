@@ -35,7 +35,7 @@ export class QueueWorker {
       let skipped = false;
       try {
         this.currentStep = 'Copying post text to clipboard...';
-        if (!(await copyToSystemClipboard(job.postText))) console.warn(`[QUEUE] ${job.id} could not copy text to the system clipboard; the browser fallback will be used.`);
+        if (!(await copyToSystemClipboard(job.postText))) console.warn(`[QUEUE] ${job.id} could not copy text to the system clipboard; the composer will still be filled directly.`);
         const page = await this.browser.page();
         await this.poster(page, job, (step) => { this.currentStep = step; console.log(`[FACEBOOK] ${step}`); });
         if (this.skipRequested.delete(job.id)) { skipped = true; console.log(`[QUEUE] Job ${job.id} skipped`); }

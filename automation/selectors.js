@@ -6,15 +6,13 @@ export const selectors = {
   checkpointText: /checkpoint|confirm your identity|account temporarily locked|security check/i,
   captchaText: /captcha|enter the characters you see/i,
   composerTriggers: [
-    (page) => page.getByRole('button', { name: /write something|create (a )?post/i }),
-    (page) => page.getByText(/write something/i, { exact: false }),
+    (page) => page.getByRole('button', { name: /write something|create (a )?post|what['’]s on your mind/i }),
+    (page) => page.getByText(/write something|what['’]s on your mind/i, { exact: false }),
   ],
   editors: [
-    (page) => page.getByRole('dialog').locator('[contenteditable="true"][role="textbox"]:not([aria-label^="Comment"]):not([aria-placeholder^="Comment"])'),
-    (page) => page.locator('[contenteditable="true"][role="textbox"]:not([aria-label^="Comment"]):not([aria-placeholder^="Comment"])'),
+    (page) => page.getByRole('dialog').locator('[contenteditable="true"]:not([aria-label^="Comment" i]):not([aria-placeholder^="Comment" i])'),
   ],
   postButtons: [
-    (page) => page.getByRole('dialog').getByRole('button', { name: /^(post|publish)$/i }),
     (page) => page.getByRole('button', { name: /^(post|publish)$/i }),
   ],
 };
@@ -22,7 +20,13 @@ export const selectors = {
 export async function firstVisible(factories, page, timeout = 8000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
-    for (const factory of factories) { const locator = factory(page).first(); if (await locator.isVisible().catch(() => false)) return locator; }
+    for (const factory of factories) {
+      const matches = factory(page);
+      for (let index = 0; index < await matches.count(); index += 1) {
+        const locator = matches.nth(index);
+        if (await locator.isVisible().catch(() => false)) return locator;
+      }
+    }
     await page.waitForTimeout(250);
   }
   return null;
@@ -32,8 +36,11 @@ export async function firstEnabled(factories, page, timeout = 8000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
     for (const factory of factories) {
-      const locator = factory(page).first();
-      if (await locator.isVisible().catch(() => false) && await locator.isEnabled().catch(() => false)) return locator;
+      const matches = factory(page);
+      for (let index = 0; index < await matches.count(); index += 1) {
+        const locator = matches.nth(index);
+        if (await locator.isVisible().catch(() => false) && await locator.isEnabled().catch(() => false)) return locator;
+      }
     }
     await page.waitForTimeout(250);
   }
