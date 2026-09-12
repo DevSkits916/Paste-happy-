@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ToastProvider, useToast } from './components/Toast';
+import { AutomationDashboard } from './components/AutomationDashboard';
 import { copyText } from './lib/clipboard';
 import { ParsedCsvRow, parseCsvRows } from './lib/csv';
 import { createId } from './lib/id';
@@ -450,6 +451,8 @@ function InnerApp() {
             </div>
           </div>
         </div>
+
+        <AutomationDashboard rows={state.rows.map((row) => ({ name: row.name, url: row.url, ad: row.ad }))} />
 
         <section>
           <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 shadow-lg shadow-slate-950/30">

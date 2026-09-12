@@ -1,80 +1,128 @@
+# Paste Happy
 
-FB Group Poster is a mobile-first, dark-themed helper that walks you through Facebook group promotions one tap at a time. Import your CSV, copy each ad to the clipboard, and open the matching group in a new tab while tracking progress locally. The app never automates Facebook logins or posting — it only assists manual workflows.
+Paste Happy is a mobile-friendly Facebook group posting assistant. It preserves the original **manual** CSV → **Copy & Open** → **Mark Posted** workflow and adds an opt-in, persistent Playwright queue that works through the normal Facebook website UI (not the Graph API).
 
-## Quick start
+> **Use responsibly.** Only post content you are permitted to post, respect group rules and Facebook's terms, and use conservative delays. UI automation is inherently brittle: Facebook can change labels, dialogs, or security checks at any time. An `uncertain` result must be reviewed manually before retrying to avoid a duplicate post.
 
-```bash
-# install dependencies
-pnpm install   # or: npm install
+## Architecture
 
-# start a dev server
-pnpm dev       # or: npm run dev
+- **Frontend:** the existing React/Vite/Tailwind application; its manual queue remains in browser `localStorage`.
+- **Backend:** Express API and an atomic JSON queue at `data/queue.json`.
+- **Worker:** one Playwright worker using a persistent Chromium profile in `.browser-profile`.
+- **Automation:** semantic role/text locators and centralized fallbacks in `automation/selectors.js`.
 
-# create a production build
-pnpm build     # or: npm run build
+GitHub Pages and Vercel static hosting cannot run the backend or persistent browser. The full automatic workflow is intended to run locally on the Windows computer where Chromium can be displayed. A hosted headless service is not a substitute for the initial interactive Facebook login and generally cannot provide a reliable persistent desktop session.
 
-# preview the production build locally
-pnpm preview   # or: npm run preview
+## Windows installation (clean checkout)
+
+Install [Git for Windows](https://git-scm.com/download/win) and the current Node.js LTS release, then open **PowerShell**:
+
+```powershell
+git clone https://github.com/DevSkits916/Paste-happy-.git
+Set-Location Paste-happy-
+npm install
+npx playwright install chromium
+npm run build
+npm start
 ```
 
-The project uses [Vite](https://vitejs.dev/) with React, TypeScript, and Tailwind CSS. No server is required; all data stays on the client and is stored in `localStorage`.
+Open <http://localhost:4173>. No compiled application or binary is committed; npm installs every JavaScript dependency from `package-lock.json`, and the Playwright command downloads the matching Chromium build. On Windows, no Linux `--with-deps` flag is needed.
+
+For development (Express and Vite together):
+
+```powershell
+npm run dev
+```
+
+Vite opens on <http://localhost:5173> and proxies `/api` to Express on port 4173. `npm start` serves the already-built `dist` UI and API from one process.
+
+## Facebook login and browser profile
+
+1. Keep the server running and select **Open Browser / Login** in Paste Happy.
+2. A Playwright-managed Chromium window opens at Facebook. Log in manually and complete any security prompts yourself.
+3. Leave that window available while running the queue. Later runs reuse `.browser-profile`.
+4. Never copy, upload, or commit `.browser-profile`; it contains sensitive session data. Paste Happy never returns cookies through its API.
+
+Headless mode cannot perform the first interactive login. The application deliberately does not automate credentials, CAPTCHA, checkpoints, or two-factor authentication.
+
+## Queue usage
+
+1. Import the same CSV used by the manual workspace and review/edit its rows.
+2. Select **Queue for Automatic Posting**. Exact URL + post-text duplicates already in the active queue are ignored.
+3. Configure delay, cooldown, maximum jobs, stop-on-failure, and stop-on-checkpoint. Defaults are deliberately conservative.
+4. Open/login to the browser, then select **Start**. You can **Pause**, **Resume**, or **Stop** without losing persisted jobs.
+5. The worker opens each group, detects login/security blocks, opens the composer, fills the post, submits, and verifies the composer closed or the text appeared.
+6. Review `failed`, `blocked`, and especially `uncertain` jobs. Retry is always manual for these states; uncertain jobs are never automatically selected again.
+
+The dashboard shows total, pending, processing, posted, failed, blocked, and uncertain counts, the current step, attempts, last error, and per-job Retry/Skip/Open Group actions. A server restart safely converts a job left in `processing` to `failed` rather than silently claiming success.
+
+## Manual fallback
+
+The original workflow remains available on desktop and phones:
+
+1. Import a CSV.
+2. Select a row and use **Copy & Open**.
+3. Paste and publish in Facebook yourself.
+4. Return to Paste Happy and select **Mark Posted** (or Skip). Local filters, editing, shuffle, undo, progress, and the sample/download tools remain available.
 
 ## CSV format
 
-Provide a header row with any of the following variants:
+The importer handles quoted commas/newlines, BOMs, and these case-insensitive headings:
 
-| Required field | Accepted headers                      |
-| -------------- | ------------------------------------- |
-| Group name     | `Group Name`, `Name`                  |
-| Group URL      | `Group URL`, `URL`                    |
-| Ad text        | `Ad`, `Ad Text`, `Post`               |
+| Value | Accepted examples |
+| --- | --- |
+| Group | `Group Name`, `group_name`, `group`, `name` |
+| URL | `Group URL`, `group_url`, `url`, `link` |
+| Post | `Post Text`, `post_text`, `post`, `ad`, `ad text`, `message` |
 
-Values that contain commas must be quoted. Empty rows are skipped automatically. You can import via file upload or by pasting CSV text directly into the import box. Re-importing a CSV preserves IDs and progress for rows with the same name+URL.
-
-### Sample CSV
-
-```
-Group Name,Group URL,Ad
-Folsom Community,https://www.facebook.com/groups/355271864659430/,"Hi neighbors — Loki and I are sharing resources: https://gofund.me/9aada7036"
-Understand Bipolar Disorder,https://www.facebook.com/groups/1234567890/,"Sending support today. If allowed, here’s ours: https://gofund.me/9aada7036"
+```csv
+Group Name,Group URL,Post
+Folsom Community,https://www.facebook.com/groups/355271864659430/,"Hello neighbors"
 ```
 
-## Features
+## Configuration
 
-- Mobile-first workflow with large tap targets and keyboard shortcuts (`j`, `k`, `c`, `m`).
-- Per-row controls: Copy & Open, Open Only, Mark Done, Next/Prev navigation.
-- Optional auto-open toggle keeps new tabs in the same gesture as clipboard copy.
-- List view with filtering, quick actions, and progress tracking.
-- Import/export CSV (with Done + Last Posted At columns) and full JSON backups.
-- Graceful clipboard fallback for iOS Safari.
-- Toast notifications for imports, copies, and backups.
-- Helpful iPhone tips to manage pop-up blockers and paste behavior.
-- Optional [Facebook Group Autofill userscript](docs/facebook-group-autofill-userscript.md) to open the group composer and paste your copy automatically after using **Copy & Open**.
-- Optional [Facebook Autopost userscript](docs/facebook-autopost-userscript.md) to paste your clipboard and click **Post** automatically after Copy & Open.
+Copy `.env.example` values into your shell or system environment before starting. Node does not implicitly load `.env`; PowerShell examples are `$env:PORT="4173"` and `$env:PLAYWRIGHT_HEADLESS="false"`.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `PORT` | `4173` | Express port |
+| `QUEUE_DATA_PATH` | `data/queue.json` | Persistent queue file |
+| `BROWSER_PROFILE_PATH` | `.browser-profile` | Private Chromium profile |
+| `PLAYWRIGHT_HEADLESS` | `false` | Use a visible browser; recommended for Facebook |
+| `DEFAULT_JOB_DELAY` | `15000` | Milliseconds between jobs |
+| `MAX_JOBS_PER_RUN` | `10` | Conservative run cap |
+
+## API
+
+`GET /api/queue`, `GET /api/queue/:id`, `POST /api/queue/import`, `POST /api/queue/start`, `/pause`, `/resume`, `/stop`, `POST /api/queue/:id/retry`, `POST /api/queue/:id/skip`, `GET /api/status`, and `POST /api/browser/login` are available. Queue state belongs to the backend, so a UI refresh does not reset it.
 
 ## Deployment
 
-### Vercel
-
-1. Run `pnpm build` (or `npm run build`).
-2. Deploy the `dist/` directory as a static site.
-3. The included `vercel.json` config serves the generated `index.html` for all routes.
-
-### Render (Static Site)
-
-Render configuration is provided in `render.yaml`:
-
-- Build command: `npm ci && npm run build`
-- Publish directory: `dist`
-- Pull request previews are disabled.
+- **Recommended/full functionality:** run locally on Windows using the commands above. Back up `data/queue.json` privately if needed.
+- **Render:** `render.yaml` now describes the Node web service and persistent queue disk. Set `QUEUE_DATA_PATH=/opt/render/project/src/data/queue.json` and `PLAYWRIGHT_HEADLESS=true`. However, Render cannot provide the normal visible desktop needed for manual login, and Facebook may challenge datacenter browsers. Treat this as API/UI deployment, not a guaranteed automation environment.
+- **Static hosting:** `npm run build` still produces a single-file-friendly `dist` UI, and the manual workflow works when statically hosted. Automatic controls show an offline notice because GitHub Pages/Vercel cannot execute Express or Playwright.
 
 ## Troubleshooting
 
-- **Clipboard prompts:** On iOS Safari, you may need to tap the textarea and choose “Paste” manually after using Copy & Open.
-- **Pop-up blocks:** Enable pop-ups for this site if Safari prevents new tabs.
-- **URL validation:** Only `http://` and `https://` URLs are considered valid for opening in a new tab.
-- **State resets:** Use the JSON backup feature to save and restore your progress.
+- **Executable missing:** run `npx playwright install chromium` from the repository.
+- **Automatic backend offline:** use `npm start` after `npm run build`, not a static file server.
+- **Login required/checkpoint/CAPTCHA:** pause, use **Open Browser / Login**, resolve the Facebook prompt manually, then manually retry the affected item.
+- **Composer/button not found:** Facebook likely changed its UI or group permissions. Use Copy & Open and update centralized fallbacks in `automation/selectors.js`.
+- **Uncertain:** inspect the group before retrying. The click may have succeeded even though verification did not.
+- **Profile locked:** close other Playwright Chromium instances using this profile, then restart Paste Happy.
+- **Windows firewall prompt:** allow Node.js for private networks if you want to open the UI from another device; do not expose the server publicly without adding authentication.
 
-## Privacy & Safety
+## Security
 
-FB Group Poster never automates form submissions, login flows, or posting on your behalf unless you explicitly install an optional userscript. All processing happens in your browser, and clipboard usage relies on native browser APIs.
+The local server has no user authentication and is intended for a trusted computer/network. Do not expose it directly to the internet. Queue text is stored unencrypted in JSON, while Facebook cookies remain in the ignored browser-profile directory. Logs contain job IDs and steps, never credentials or cookies. Keep dependencies updated and stop the server/browser when finished.
+
+## Validation
+
+```powershell
+npm test
+npm run build
+npm start
+```
+
+Tests cover CSV normalization, queue creation and transitions, persistence and restart recovery, duplicate protection, retry/uncertain behavior, failure continuation, and API endpoints.

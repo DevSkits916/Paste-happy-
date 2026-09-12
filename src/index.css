@@ -22,3 +22,10 @@ a {
 .top-action-bar {
   padding-top: calc(env(safe-area-inset-top, 0px) + 0.75rem);
 }
+
+.status-posted { @apply bg-emerald-500/20 text-emerald-200; }
+.status-pending { @apply bg-sky-500/20 text-sky-200; }
+.status-processing { @apply bg-violet-500/20 text-violet-200; }
+.status-failed, .status-blocked { @apply bg-rose-500/20 text-rose-200; }
+.status-uncertain { @apply bg-amber-500/20 text-amber-200; }
+.status-skipped { @apply bg-slate-700 text-slate-200; }

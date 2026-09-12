@@ -1,7 +1,10 @@
 services:
   - type: web
     name: fb-group-poster
-    env: static
+    env: node
     buildCommand: npm ci --include=dev && npm run build
-    staticPublishPath: dist
-    pullRequestPreviewsEnabled: false
+    startCommand: npm start
+    disk:
+      name: paste-happy-data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1
