@@ -338,6 +338,9 @@ function InnerApp() {
               if (currentRow) handleSkip(currentRow);
             }}
           />
+          <span className="ml-auto shrink-0 rounded-full border border-sky-400/40 bg-sky-500/10 px-4 py-2 text-xs font-bold uppercase tracking-widest text-sky-100">
+            Manual Mode
+          </span>
         </div>
       </section>
       <header className="space-y-4">
@@ -348,7 +351,9 @@ function InnerApp() {
                 <img src="/logo-fq.svg" alt="Paste Happy logo" className="h-12 w-12" />
               </span>
               <div className="space-y-3">
-                <h1 className="text-3xl font-semibold tracking-tight text-white">PasteHappy</h1>
+                <h1 className="text-3xl font-semibold tracking-tight text-white">
+                  PasteHappy <span className="text-violet-300">+ Playwright</span>
+                </h1>
                 <div className="grid grid-cols-2 gap-3 text-sm sm:flex sm:flex-wrap">
                   <ActionPill label="Total" value={total} tone="neutral" />
                   <ActionPill label="Pending" value={counts.pending} tone="sky" />
