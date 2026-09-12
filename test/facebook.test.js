@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { postToFacebook } from '../automation/facebook.js';
 
-function locator(visible, text = '') { return { first() { return this; }, async isVisible() { return visible; }, async innerText() { return text; }, async click() {}, async fill() {}, locator() { return this; } }; }
+function locator(visible, text = '') { return { first() { return this; }, async isVisible() { return visible; }, async isEnabled() { return true; }, async innerText() { return text; }, async click() {}, async focus() {}, async fill() {}, locator() { return this; } }; }
 test('login-required state becomes a structured security error without submitting', async () => {
   const page = {
     async goto() {}, async waitForTimeout() {}, url: () => 'https://www.facebook.com/login',
@@ -15,7 +15,7 @@ test('login-required state becomes a structured security error without submittin
 
 test('simulated composer submission and verification reports posted', async () => {
   let filled = ''; let clicked = false; let clipboard = ''; let pasted = '';
-  const editor = { ...locator(true), async fill(value) { filled = value; }, async innerText() { return pasted; }, async isVisible() { return !clicked; } };
+  const editor = { ...locator(true), async fill(value) { filled = value; }, async innerText() { return pasted; }, async isVisible() { return !clicked; }, async focus() {} };
   const page = {
     async goto() {}, async waitForTimeout() {}, url: () => 'https://www.facebook.com/groups/1',
     context() { return { async grantPermissions() {} }; },
