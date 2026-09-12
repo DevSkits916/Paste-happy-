@@ -49,9 +49,11 @@ export async function postToFacebook(page, job, onStep = () => {}) {
     const button = await firstEnabled(selectors.postButtons, page); if (!button) throw new AutomationError('POST_BUTTON_NOT_FOUND', 'Post button was not enabled after entering the text.');
     onStep('Submitting post...'); await button.click(); submitted = true;
     onStep('Verifying post...');
-    await page.waitForTimeout(2500);
-    const dialogClosed = !(await editor.isVisible().catch(() => false));
-    const textVisible = await page.getByText(job.postText.slice(0, 80), { exact: false }).first().isVisible().catch(() => false);
+    const [dialogVisible, textVisible] = await Promise.all([
+      editor.isVisible().catch(() => false),
+      page.getByText(job.postText.slice(0, 80), { exact: false }).first().isVisible().catch(() => false),
+    ]);
+    const dialogClosed = !dialogVisible;
     if (!dialogClosed && !textVisible) throw new AutomationError('POST_UNCERTAIN', 'Submission was clicked but confirmation could not be verified.');
     return { status: 'posted' };
   } catch (error) {
