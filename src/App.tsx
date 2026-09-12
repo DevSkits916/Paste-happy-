@@ -5,7 +5,6 @@ import { copyText } from './lib/clipboard';
 import { ParsedCsvRow, parseCsvRows } from './lib/csv';
 import { createId } from './lib/id';
 import { loadState, saveState } from './lib/storage';
-import { SAMPLE_CSV, SAMPLE_CSV_ROW_COUNT } from './lib/sampleCsv';
 import { RowHistoryEntry, RowStatusKind } from './lib/types';
 
 interface QueueRow {
@@ -28,53 +27,6 @@ interface AppState {
 
 const STORAGE_KEY = 'paste-happy-session-v3';
 const UNDO_DURATION_MS = 16000;
-
-const FACEBOOK_GROUPS_SCANNER_SCRIPT_PATH = '/userscripts/facebook-groups-discover-export.user.js';
-
-interface TutorialSection {
-  title: string;
-  description: string;
-  items: string[];
-  note?: string;
-}
-
-const TUTORIAL_SECTIONS: TutorialSection[] = [
-  {
-    title: 'Part 1: Prepare your Facebook group CSV',
-    description:
-      'Start by exporting the group list you want to work through. Keep the original file untouched until you are ready to add content.',
-    items: [
-      'Install Tampermonkey from https://www.tampermonkey.net and use it (or another userscript browser extension) to run the script.',
-      'Open the Facebook groups join/discovery page and scroll until the groups you want are visible.',
-      'Run the scan and export the CSV when you are finished loading groups.',
-      'Confirm the file includes group_name and group_url before moving on.',
-    ],
-  },
-  {
-    title: 'Part 2: Add one post per row',
-    description:
-      'Use ChatGPT to turn the exported CSV into a completed file with a unique advertisement for each Facebook group before you import it into Paste Happy.',
-    items: [
-      'Upload the exported CSV directly into ChatGPT.',
-      'Tell ChatGPT to add or fill a post column with one unique advertisement for each Facebook group listed in the CSV.',
-      'Ask ChatGPT to keep the existing rows in the same order and return the finished CSV with every row completed.',
-      'Download the completed CSV ChatGPT generates, then review the post text before importing it into Paste Happy.',
-    ],
-    note: 'Paste Happy works best when the downloaded CSV already includes one finished advertisement in the post column for every row.',
-  },
-  {
-    title: 'Part 3: Load the finished CSV into Paste Happy and post row by row',
-    description:
-      'Paste Happy treats every CSV row as a single posting unit so you can move through the queue in order and post quickly without losing your place.',
-    items: [
-      'Open Paste Happy and import the completed CSV file.',
-      'Use the row list to review group names, URLs, and post text before posting.',
-      'Select the current row, then use Copy & Open to copy the post column to your clipboard and open the Facebook group from that same CSV row.',
-      'Paste the clipboard contents into Facebook, publish the post, then return to Paste Happy and click Mark Posted so you can move straight to the next group rapidly.',
-      'Keep the queue sequential so your progress in Paste Happy always matches the CSV.',
-    ],
-  },
-] as const;
 
 function InnerApp() {
   const { push } = useToast();
@@ -343,17 +295,6 @@ function InnerApp() {
     [handleImport]
   );
 
-  const handleDownloadSample = useCallback(() => {
-    const blob = new Blob([SAMPLE_CSV], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = 'paste-happy-sample.csv';
-    anchor.click();
-    URL.revokeObjectURL(url);
-    push(`Downloaded sample CSV with ${SAMPLE_CSV_ROW_COUNT} example groups.`, 'success');
-  }, [push]);
-
   const handlePostEdit = useCallback((id: string, ad: string) => {
     updateRow(id, (row) => ({ ...row, ad }));
   }, [updateRow]);
@@ -407,10 +348,6 @@ function InnerApp() {
                 <img src="/logo-fq.svg" alt="Paste Happy logo" className="h-12 w-12" />
               </span>
               <div className="space-y-3">
-                <p className="inline-flex items-center gap-2 rounded-full bg-slate-900/60 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-sky-100 ring-1 ring-sky-500/30">
-                  <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                  Tutorial workspace
-                </p>
                 <h1 className="text-3xl font-semibold tracking-tight text-white">PasteHappy</h1>
                 <div className="grid grid-cols-2 gap-3 text-sm sm:flex sm:flex-wrap">
                   <ActionPill label="Total" value={total} tone="neutral" />
@@ -434,65 +371,12 @@ function InnerApp() {
                 </span>
                 <span>Import CSV</span>
               </button>
-              <button
-                type="button"
-                onClick={handleDownloadSample}
-                className="h-11 rounded-full border border-sky-400/50 bg-sky-500/20 px-4 text-sm font-semibold uppercase tracking-wide text-sky-50 shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
-              >
-                Sample CSV
-              </button>
-              <a
-                href={FACEBOOK_GROUPS_SCANNER_SCRIPT_PATH}
-                download="facebook-groups-discover-export.user.js"
-                className="inline-flex h-11 items-center justify-center rounded-full border border-fuchsia-400/50 bg-fuchsia-500/15 px-4 text-sm font-semibold uppercase tracking-wide text-fuchsia-50 shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-fuchsia-400"
-              >
-                Download Userscript
-              </a>
             </div>
           </div>
         </div>
 
         <AutomationDashboard rows={state.rows.map((row) => ({ name: row.name, url: row.url, ad: row.ad }))} />
 
-        <section>
-          <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 shadow-lg shadow-slate-950/30">
-            <div className="flex items-start justify-between gap-3">
-              <div className="space-y-2">
-                <h2 className="text-xl font-semibold text-white">Tutorial</h2>
-              </div>
-              <span className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-200 ring-1 ring-slate-700">
-                Top to bottom
-              </span>
-            </div>
-
-            <div className="mt-5 space-y-4">
-              <p className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-                You can download the sample CSV and import it to see how Paste Happy works, or adapt it for your own Facebook groups and ads by following the tutorial below.
-              </p>
-              {TUTORIAL_SECTIONS.map((section) => (
-                <article key={section.title} className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
-                  <h3 className="text-base font-semibold text-white">{section.title}</h3>
-                  <p className="mt-2 text-sm text-slate-300">{section.description}</p>
-                  <ol className="mt-3 space-y-2 text-sm text-slate-200">
-                    {section.items.map((item) => (
-                      <li key={item} className="flex gap-3">
-                        <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sky-500/15 text-[11px] font-bold text-sky-200 ring-1 ring-sky-500/30">
-                          •
-                        </span>
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ol>
-                  {section.note && (
-                    <p className="mt-3 rounded-2xl border border-sky-500/20 bg-sky-500/10 px-3 py-2 text-xs text-sky-100">
-                      {section.note}
-                    </p>
-                  )}
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
       </header>
 
       <section className="sticky top-20 z-20 -mx-4 border-y border-slate-800 bg-slate-950/90 px-4 py-3 backdrop-blur">
