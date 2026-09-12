@@ -1,19 +1,10 @@
-import { spawn } from 'node:child_process';
+import { copyToSystemClipboard } from './clipboard.js';
 import { firstVisible, selectors } from './selectors.js';
 
 export class AutomationError extends Error { constructor(code, message, options = {}) { super(`${code}: ${message}`); this.code = code; this.security = options.security; } }
 
-async function copyToWindowsClipboard(text) {
-  return new Promise((resolve) => {
-    const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Set-Clipboard -Value ([Console]::In.ReadToEnd())'], { stdio: ['pipe', 'ignore', 'ignore'], windowsHide: true });
-    child.once('error', () => resolve(false));
-    child.once('close', (code) => resolve(code === 0));
-    child.stdin.end(text, 'utf8');
-  });
-}
-
 async function copyPostText(page, text) {
-  if (process.platform === 'win32' && await copyToWindowsClipboard(text)) return true;
+  if (await copyToSystemClipboard(text)) return true;
   try {
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new URL(page.url()).origin });
     await page.evaluate((value) => navigator.clipboard.writeText(value), text);
@@ -24,6 +15,10 @@ async function copyPostText(page, text) {
 }
 
 async function pastePostText(page, editor, text) {
+  await editor.click();
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+V' : 'Control+V');
+  await page.waitForTimeout(150);
+  if ((await editor.innerText().catch(() => '')).includes(text)) return true;
   if (!(await copyPostText(page, text))) return false;
   await editor.click();
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+V' : 'Control+V');
