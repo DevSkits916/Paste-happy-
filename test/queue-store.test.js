@@ -26,3 +26,9 @@ test('recovers an interrupted processing job as failed', async () => {
   const first = await store(); await first.import([row]); await first.claimNext();
   const recovered = await new QueueStore(first.filePath).init(); assert.equal(recovered.list()[0].status, 'failed');
 });
+
+test('clearing the queue removes every job', async () => {
+  const queue = await store();
+  await queue.import([{ groupName: 'One', groupUrl: 'https://facebook.com/groups/1', postText: 'Hello' }]);
+  assert.deepEqual(await queue.clear(), { cleared: 1 }); assert.deepEqual(queue.list(), []);
+});

@@ -11,6 +11,7 @@ export function createApp({ store, worker, browser, root = process.cwd() }) {
   app.post('/api/queue/pause', (_req, res) => { worker.pause(); res.json(worker.status()); });
   app.post('/api/queue/resume', (_req, res) => { worker.resume(); res.json(worker.status()); });
   app.post('/api/queue/stop', (_req, res) => { worker.stop(); res.json(worker.status()); });
+  app.post('/api/queue/clear', async (_req, res, next) => { try { res.json(await worker.clearQueue()); } catch (e) { next(e); } });
   app.post('/api/queue/current/skip', async (_req, res, next) => { try { const job = await worker.skipCurrent(); return job ? res.json(worker.status()) : res.status(409).json({ error: 'No current job to skip' }); } catch (e) { next(e); } });
   app.post('/api/queue/:id/retry', async (req, res, next) => { try { const job = await store.retry(req.params.id); return job ? res.json(job) : res.status(404).json({ error: 'Job not found' }); } catch (e) { next(e); } });
   app.post('/api/queue/:id/skip', async (req, res, next) => { try { const job = await store.skip(req.params.id); return job ? res.json(job) : res.status(404).json({ error: 'Job not found' }); } catch (e) { next(e); } });

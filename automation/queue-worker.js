@@ -13,6 +13,11 @@ export class QueueWorker {
   pause() { if (this.runPromise) this.mode = 'paused'; }
   resume() { if (this.runPromise && this.mode === 'paused') this.mode = 'running'; }
   stop() { this.mode = 'stopped'; }
+  async clearQueue() {
+    this.mode = 'stopped'; this.currentJob = null; this.currentStep = 'Queue cleared'; this.skipRequested.clear();
+    await this.browser.close?.();
+    return this.store.clear();
+  }
   async skipCurrent() {
     if (!this.runPromise || !this.currentJob) return null;
     const jobId = this.currentJob.id;
