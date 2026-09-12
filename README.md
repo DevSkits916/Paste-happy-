@@ -2,7 +2,10 @@
 
 Paste Happy is a mobile-friendly Facebook group posting assistant. It preserves the original **manual** CSV → **Copy & Open** → **Mark Posted** workflow and adds an opt-in, persistent Playwright queue that works through the normal Facebook website UI (not the Graph API).
 
-> **Use responsibly.** Only post content you are permitted to post, respect group rules and Facebook's terms, and use conservative delays. UI automation is inherently brittle: Facebook can change labels, dialogs, or security checks at any time. An `uncertain` result must be reviewed manually before retrying to avoid a duplicate post.
+************************************************************************************************************************
+Use responsibly. Only post content you are permitted to post, respect group rules and Facebook's terms, and use conservative delays. UI automation is inherently brittle: Facebook can change labels, dialogs, or security checks at any time. An `uncertain` result must be reviewed manually before retrying to avoid a duplicate post.
+**************************************************************************************************************************
+
 
 ## Architecture
 
