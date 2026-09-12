@@ -52,12 +52,12 @@ function inlineBundlePlugin(): Plugin {
 
       if (cssSnippets.length) {
         const styles = `<style>${cssSnippets.join('\n')}</style>`;
-        html = html.replace('</head>', `${styles}</head>`);
+        html = html.replace('</head>', () => `${styles}</head>`);
       }
 
       if (jsSnippets.length) {
         const scripts = `<script type="module">${jsSnippets.join('\n')}</script>`;
-        html = html.replace('</body>', `${scripts}</body>`);
+        html = html.replace('</body>', () => `${scripts}</body>`);
       }
 
       htmlAsset.source = html.trim();
