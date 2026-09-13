@@ -1,6 +1,7 @@
 
 # Paste Happy
-<img width="1335" height="707" alt="Screenshot 2026-09-13 140044" src="https://github.com/user-attachments/assets/5c29366e-397b-4d3e-acfb-36ea4e9a80ad" />
+<img width="1352" height="719" alt="Screenshot 2026-09-13 153514" src="https://github.com/user-attachments/assets/3c2bb229-5fb9-498c-a30e-649df709dffd" />
+
 
 
 Paste Happy is a mobile-friendly Facebook group posting assistant. It preserves the original **manual** CSV → **Copy & Open** → **Mark Posted** workflow and adds an opt-in, persistent Playwright queue that works through the normal Facebook website UI (not the Graph API).
