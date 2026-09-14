@@ -1,3 +1,4 @@
+<img width="931" height="593" alt="Screenshot 2026-09-13 190347" src="https://github.com/user-attachments/assets/86097bee-87be-459b-8516-068709c39bd6" />
 
 # Paste Happy
 <img width="1352" height="719" alt="Screenshot 2026-09-13 153514" src="https://github.com/user-attachments/assets/3c2bb229-5fb9-498c-a30e-649df709dffd" />
