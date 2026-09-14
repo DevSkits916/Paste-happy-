@@ -5,6 +5,7 @@ import { copyText } from './lib/clipboard';
 import { ParsedCsvRow, parseCsvRows } from './lib/csv';
 import { createId } from './lib/id';
 import { loadState, saveState } from './lib/storage';
+import { SAMPLE_CSV } from './lib/sampleCsv';
 import { RowHistoryEntry, RowStatusKind } from './lib/types';
 
 interface QueueRow {
@@ -303,6 +304,19 @@ function InnerApp() {
     fileInputRef.current?.click();
   }, []);
 
+  const handleSampleCsvDownload = useCallback(() => {
+    const blob = new Blob([SAMPLE_CSV], { type: 'text/csv;charset=utf-8' });
+    const downloadUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = 'facebook-groups-joins-with-posts.csv';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(downloadUrl);
+    push('Sample CSV downloaded.', 'success');
+  }, [push]);
+
   const handleSetCurrent = useCallback((row: QueueRow) => {
     setState((prev) => ({ ...prev, currentId: row.id }));
   }, []);
@@ -375,6 +389,13 @@ function InnerApp() {
                   </svg>
                 </span>
                 <span>Import CSV</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleSampleCsvDownload}
+                className="inline-flex h-14 items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-6 text-base font-bold uppercase tracking-[0.2em] text-sky-100 shadow-lg shadow-slate-950/30 transition hover:border-sky-400/60 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-200"
+              >
+                Sample CSV
               </button>
             </div>
           </div>
