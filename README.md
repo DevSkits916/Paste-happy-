@@ -1,4 +1,4 @@
-<img width="931" height="593" alt="Screenshot 2026-09-13 190347" src="https://github.com/user-attachments/assets/86097bee-87be-459b-8516-068709c39bd6" />
+
 
 # Paste Happy
 <img width="1352" height="719" alt="Screenshot 2026-09-13 153514" src="https://github.com/user-attachments/assets/3c2bb229-5fb9-498c-a30e-649df709dffd" />
@@ -10,8 +10,8 @@ Paste Happy is a mobile-friendly Facebook group posting assistant. It preserves 
 ************************************************************************************************************************
 Use responsibly. Only post content you are permitted to post, respect group rules and Facebook's terms, and use conservative delays. UI automation is inherently brittle: Facebook can change labels, dialogs, or security checks at any time. An `uncertain` result must be reviewed manually before retrying to avoid a duplicate post.
 **************************************************************************************************************************
-
-
+Chrome Extension for sraping facebook group names and urls to csv download zip of extension. extract and load through chrome -----> Extensions  (enable Developer mode) and install as unpacked extension 
+<img width="931" height="593" alt="Screenshot 2026-09-13 190347" src="https://github.com/user-attachments/assets/86097bee-87be-459b-8516-068709c39bd6" />
 ## Architecture
 
 - **Frontend:** the existing React/Vite/Tailwind application; its manual queue remains in browser `localStorage`.
