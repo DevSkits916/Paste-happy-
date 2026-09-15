@@ -12,18 +12,7 @@
 - Add or select the post content you want to use
 - Make sure you are logged into Facebook
 - Confirm your saved browser session/profile is working
-
-### How to Use
-
-1. Open **Paste Happy** and load or select your posts and Facebook groups.
-2. Verify the group URLs are correct.
-3. Start the **Playwright automation** from the project folder.
-4. Log into Facebook if your saved session is not already active.
-5. The automation will work through the group list and handle the configured posting workflow.
-6. Leave the browser open until the automation finishes.
-7. Check the log/results for completed posts, skipped groups, or errors.
-
-**Tip:** Keeping a persistent Facebook browser profile saves you from logging in every run, because apparently typing the same password repeatedly is still considered modern computing.
+  
 ### How to Use Paste Happy + Playwright
 
 1. Open **Paste Happy** and load or select the posts and Facebook groups you want to use.
