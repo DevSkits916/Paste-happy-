@@ -2,16 +2,8 @@
 
 # Paste Happy
 <img width="1352" height="719" alt="Screenshot 2026-09-13 153514" src="https://github.com/user-attachments/assets/3c2bb229-5fb9-498c-a30e-649df709dffd" />
-### Paste Happy + Playwright
 
-#### Quick Setup Checklist
-- Install **Node.js**
-- Install project dependencies with `npm install`
-- Install Playwright browsers with `npx playwright install`
-- Add your Facebook group URLs to **Paste Happy**
-- Add or select the post content you want to use
-- Make sure you are logged into Facebook
-- Confirm your saved browser session/profile is working
+
   
 ### How to Use Paste Happy + Playwright
 
@@ -24,7 +16,7 @@
 7. Check the log or results screen for completed posts, skipped groups, or errors.
 
 **Tip:** Keep your Facebook login session saved so you do not have to sign in every time..
-
+************************************
 Chrome extension for scraping Facebook group names and URLs and exporting them to a CSV file.
 https://github.com/DevSkits916/Playwright-PasteHappy/blob/main/Chrome%20Extension%20Facebook%20Group%20Scaper.zip
 **Installation:**
@@ -36,6 +28,8 @@ https://github.com/DevSkits916/Playwright-PasteHappy/blob/main/Chrome%20Extensio
 6. Select the extracted extension folder.
 
 Once installed, the extension can collect Facebook group names and URLs and export the results as a CSV file.
+***********************
+
 <img width="931" height="593" alt="Screenshot 2026-09-13 190347" src="https://github.com/user-attachments/assets/86097bee-87be-459b-8516-068709c39bd6" />
 ## Architecture
 
