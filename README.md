@@ -11,7 +11,7 @@ Paste Happy is a mobile-friendly Facebook group posting assistant. It preserves 
 Use responsibly. Only post content you are permitted to post, respect group rules and Facebook's terms, and use conservative delays. UI automation is inherently brittle: Facebook can change labels, dialogs, or security checks at any time. An `uncertain` result must be reviewed manually before retrying to avoid a duplicate post.
 **************************************************************************************************************************
 Chrome extension for scraping Facebook group names and URLs and exporting them to a CSV file.
-
+https://github.com/DevSkits916/Playwright-PasteHappy/blob/main/Chrome%20Extension%20Facebook%20Group%20Scaper.zip
 **Installation:**
 1. Download the ZIP file containing the extension.
 2. Extract the ZIP file.
