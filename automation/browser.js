@@ -4,6 +4,13 @@ import { chromium } from 'playwright';
 
 export class BrowserManager {
   constructor({ profilePath, headless, executablePath }) { this.profilePath = profilePath; this.headless = headless; this.executablePath = executablePath; this.context = null; }
+  setHeadless(headless) {
+    const nextHeadless = Boolean(headless);
+    if (this.context && this.headless !== nextHeadless) {
+      throw new Error('Close the current Playwright browser before changing headless mode.');
+    }
+    this.headless = nextHeadless;
+  }
   async exists() { try { return (await readdir(this.profilePath)).length > 0; } catch { return false; } }
   async open() {
     if (this.context) return this.context;
@@ -22,7 +29,11 @@ export class BrowserManager {
       : [];
     return candidates.find((candidate) => candidate && existsSync(candidate));
   }
-  async login() { const context = await this.open(); const page = context.pages()[0] || await context.newPage(); await page.goto('https://www.facebook.com/', { waitUntil: 'domcontentloaded' }); return { opened: true }; }
+  async login({ headless } = {}) {
+    if (headless !== undefined) this.setHeadless(headless);
+    if (this.headless) throw new Error('Headless mode cannot be used for interactive Facebook login. Turn it off, log in, then enable it for a later run.');
+    const context = await this.open(); const page = context.pages()[0] || await context.newPage(); await page.goto('https://www.facebook.com/', { waitUntil: 'domcontentloaded' }); return { opened: true };
+  }
   async page() { const context = await this.open(); return context.pages()[0] || context.newPage(); }
   async close() { const context = this.context; this.context = null; await context?.close().catch(() => {}); }
 }

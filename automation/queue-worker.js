@@ -8,6 +8,7 @@ export class QueueWorker {
   start(options = {}) {
     if (this.runPromise) return false;
     this.options = { delayMs: this.defaults.defaultJobDelay, maxJobs: this.defaults.maxJobsPerRun, cooldownMs: 0, stopOnFailure: false, stopOnCheckpoint: true, ...options };
+    if (typeof this.options.headless === 'boolean') this.browser.setHeadless?.(this.options.headless);
     this.mode = 'running'; this.runPromise = this.run().finally(() => { this.runPromise = null; if (this.mode !== 'stopped') this.mode = 'idle'; this.currentJob = null; }); return true;
   }
   pause() { if (this.runPromise) this.mode = 'paused'; }

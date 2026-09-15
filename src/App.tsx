@@ -321,6 +321,26 @@ function InnerApp() {
     setState((prev) => ({ ...prev, currentId: row.id }));
   }, []);
 
+  const openAutomationWindow = useCallback(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('window', 'automation');
+    const automationWindow = window.open(url.toString(), 'pastehappy-automation', 'popup=yes,width=1280,height=900');
+    if (!automationWindow) push('Allow pop-ups to open the Playwright automation window.', 'error');
+  }, [push]);
+
+  const isAutomationWindow = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('window') === 'automation';
+  if (isAutomationWindow) {
+    return (
+      <div className="min-h-screen bg-slate-950 px-4 py-6 text-slate-100">
+        <div className="mx-auto mb-5 flex max-w-6xl items-center justify-between gap-4">
+          <div className="flex items-center gap-3"><img src="/logo-fq.svg" alt="Paste Happy logo" className="h-10 w-10" /><span className="text-lg font-semibold">PasteHappy Automation</span></div>
+          <button type="button" onClick={() => window.close()} className="rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-semibold">Close window</button>
+        </div>
+        <AutomationDashboard rows={state.rows.map((row) => ({ name: row.name, url: row.url, ad: row.ad }))} />
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-6 px-4 pb-10 pt-24 text-slate-100">
       <section className="top-action-bar fixed inset-x-0 top-0 z-50 border-b border-slate-800 bg-slate-950/95 px-4 py-3 shadow-lg shadow-slate-950/40 backdrop-blur">
@@ -380,6 +400,13 @@ function InnerApp() {
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
               <button
                 type="button"
+                onClick={openAutomationWindow}
+                className="inline-flex h-14 items-center justify-center rounded-full border border-violet-400/60 bg-violet-500/15 px-6 text-base font-bold uppercase tracking-[0.16em] text-violet-100 shadow-lg shadow-violet-950/30 transition hover:bg-violet-500/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet-200"
+              >
+                Open Playwright Automation
+              </button>
+              <button
+                type="button"
                 onClick={handleFilePicker}
                 className="inline-flex h-14 items-center justify-center gap-3 rounded-full border border-sky-300 bg-sky-400 px-6 text-base font-bold uppercase tracking-[0.2em] text-slate-950 shadow-lg shadow-sky-500/30 transition hover:bg-sky-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-200"
               >
@@ -400,8 +427,6 @@ function InnerApp() {
             </div>
           </div>
         </div>
-
-        <AutomationDashboard rows={state.rows.map((row) => ({ name: row.name, url: row.url, ad: row.ad }))} />
 
       </header>
 
