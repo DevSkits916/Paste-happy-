@@ -2,14 +2,40 @@
 
 # Paste Happy
 <img width="1352" height="719" alt="Screenshot 2026-09-13 153514" src="https://github.com/user-attachments/assets/3c2bb229-5fb9-498c-a30e-649df709dffd" />
+### Paste Happy + Playwright
 
+#### Quick Setup Checklist
+- Install **Node.js**
+- Install project dependencies with `npm install`
+- Install Playwright browsers with `npx playwright install`
+- Add your Facebook group URLs to **Paste Happy**
+- Add or select the post content you want to use
+- Make sure you are logged into Facebook
+- Confirm your saved browser session/profile is working
 
+### How to Use
 
-Paste Happy is a mobile-friendly Facebook group posting assistant. It preserves the original **manual** CSV → **Copy & Open** → **Mark Posted** workflow and adds an opt-in, persistent Playwright queue that works through the normal Facebook website UI (not the Graph API).
+1. Open **Paste Happy** and load or select your posts and Facebook groups.
+2. Verify the group URLs are correct.
+3. Start the **Playwright automation** from the project folder.
+4. Log into Facebook if your saved session is not already active.
+5. The automation will work through the group list and handle the configured posting workflow.
+6. Leave the browser open until the automation finishes.
+7. Check the log/results for completed posts, skipped groups, or errors.
 
-************************************************************************************************************************
-Use responsibly. Only post content you are permitted to post, respect group rules and Facebook's terms, and use conservative delays. UI automation is inherently brittle: Facebook can change labels, dialogs, or security checks at any time. An `uncertain` result must be reviewed manually before retrying to avoid a duplicate post.
-**************************************************************************************************************************
+**Tip:** Keeping a persistent Facebook browser profile saves you from logging in every run, because apparently typing the same password repeatedly is still considered modern computing.
+### How to Use Paste Happy + Playwright
+
+1. Open **Paste Happy** and load or select the posts and Facebook groups you want to use.
+2. Make sure the group list contains the correct Facebook group URLs. (SEE CHROME EXTENSION BELLOW FOR MAKING YOUR OWN CSV WITH GROUPS)
+3. Start the **Playwright automation** from the project folder.
+4. Log into Facebook if your saved browser session is not already active.
+5. The automation will open each group, paste the selected post, and complete the posting workflow automatically.
+6. Leave the browser open until the automation finishes.
+7. Check the log or results screen for completed posts, skipped groups, or errors.
+
+**Tip:** Keep your Facebook login session saved so you do not have to sign in every time..
+
 Chrome extension for scraping Facebook group names and URLs and exporting them to a CSV file.
 https://github.com/DevSkits916/Playwright-PasteHappy/blob/main/Chrome%20Extension%20Facebook%20Group%20Scaper.zip
 **Installation:**
